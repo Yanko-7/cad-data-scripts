@@ -8,6 +8,8 @@ from multiprocessing import Pool
 from tqdm import tqdm
 from itertools import product
 
+from json2files import load_dataset_fast
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--bit", type=int, default=6)
 parser.add_argument("--workers", type=int, default=os.cpu_count() - 2)
@@ -51,9 +53,6 @@ def compute_hash(path):
         # 1. Translation (Centering) - KEEP
         pts -= np.mean(pts, axis=0)
 
-        # 2. Rotation (PCA) - REMOVED!
-        # (已删除 PCA 代码，保持原始旋转姿态)
-
         # 3. Scale (Normalization) - KEEP
         max_val = np.max(np.abs(pts))
         if max_val > 1e-8:
@@ -75,11 +74,9 @@ def compute_hash(path):
                 min_h = curr_h
 
         return path, (simple_id, min_h)
-    except:
+    except Exception:
         return path, None
 
-
-from json2files import load_dataset_fast
 
 if __name__ == "__main__":
     dataset = load_dataset_fast(

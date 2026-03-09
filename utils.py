@@ -1,51 +1,43 @@
 import numpy as np
 from OCC.Core import TopoDS
-from OCC.Core.TopoDS import TopoDS_Shape, topods
-from OCC.Core.TopExp import TopExp_Explorer
-from OCC.Core.BRep import BRep_Builder
-from OCC.Core.BRepTools import BRepTools_WireExplorer, breptools
-from OCC.Core.TopAbs import (
-    TopAbs_FACE,
-    TopAbs_WIRE,
-    TopAbs_EDGE,
-    TopAbs_SHELL,
-    TopAbs_VERTEX,
-)
-from OCC.Core.TopTools import TopTools_IndexedMapOfShape
+from OCC.Core.BRep import BRep_Builder, BRep_Tool
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCC.Core.ShapeUpgrade import ShapeUpgrade_ShapeDivideClosed
-from OCC.Core.ShapeUpgrade import ShapeUpgrade_ShapeDivideClosedEdges
-from OCC.Core.ShapeFix import ShapeFix_Shape
-from OCC.Core.BRepCheck import BRepCheck_Analyzer
-from OCC.Extend.DataExchange import read_step_file
-from OCC.Core.Precision import precision
-from OCC.Core.ShapeUpgrade import ShapeUpgrade_ShapeConvertToBezier
-from OCC.Core.ShapeCustom import shapecustom, ShapeCustom_RestrictionParameters
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
-from OCC.Core.BRep import BRep_Tool
+from OCC.Core.BRepCheck import BRepCheck_Analyzer, BRepCheck_ListIteratorOfListOfStatus
+from OCC.Core.BRepTools import BRepTools_WireExplorer, breptools
 from OCC.Core.Geom import (
-    Geom_BezierSurface,
     Geom_BezierCurve,
+    Geom_BezierSurface,
     Geom_RectangularTrimmedSurface,
     Geom_TrimmedCurve,
 )
-from OCC.Core.GeomAbs import GeomAbs_C2, GeomAbs_C1
-from OCC.Core.TopAbs import TopAbs_SOLID
+from OCC.Core.GeomAbs import GeomAbs_C1, GeomAbs_C2
 from OCC.Core.GeomConvert import geomconvert
-
-from OCC.Core.TopExp import topexp
-from OCC.Core.TopoDS import TopoDS_Shape
+from OCC.Core.Precision import precision
+from OCC.Core.ShapeCustom import ShapeCustom_RestrictionParameters, shapecustom
+from OCC.Core.ShapeFix import ShapeFix_Shape
+from OCC.Core.ShapeUpgrade import (
+    ShapeUpgrade_ShapeConvertToBezier,
+    ShapeUpgrade_ShapeDivideClosed,
+    ShapeUpgrade_ShapeDivideClosedEdges,
+)
 from OCC.Core.TopAbs import (
     TopAbs_COMPOUND,
     TopAbs_COMPSOLID,
-    TopAbs_SOLID,
-    TopAbs_SHELL,
-    TopAbs_FACE,
     TopAbs_EDGE,
+    TopAbs_FACE,
+    TopAbs_SHELL,
+    TopAbs_SOLID,
+    TopAbs_VERTEX,
+    TopAbs_WIRE,
 )
 from OCC.Core.TopExp import TopExp_Explorer, topexp
-from OCC.Core.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
-from OCC.Core.BRepCheck import BRepCheck_ListIteratorOfListOfStatus
+from OCC.Core.TopoDS import TopoDS_Shape, topods
+from OCC.Core.TopTools import (
+    TopTools_IndexedDataMapOfShapeListOfShape,
+    TopTools_IndexedMapOfShape,
+)
+from OCC.Extend.DataExchange import read_step_file
 
 
 def estimate_token_count(n_faces: int, n_edges: int) -> int:
@@ -484,7 +476,6 @@ def check_euler_poincare(shape):
 
 
 def restrict_infinite_surfaces(shape):
-
     builder = BRep_Builder()
     ex = TopExp_Explorer(shape, TopAbs_FACE)
 

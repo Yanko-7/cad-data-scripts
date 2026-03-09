@@ -21,8 +21,8 @@ OUTPUT_BASE_DIR = r"/cache/yanko/dataset/abc_preprocessed/organized_by_face_coun
 
 # 3. 数据集切分配置
 SPLIT_JSON_NAME = "dataset_split.json"
-# 仅将以下前缀的文件夹纳入训练集 (例如排除 05, 06 等高面数模型)
-TRAIN_TARGET_PREFIXES = ("01_", "02_", "03_", "04_")
+# 仅将以下前缀的文件夹纳入训练集 (例如排除  06 等高面数模型)
+TRAIN_TARGET_PREFIXES = ("01_", "02_", "03_", "04_", "05_")
 SPLIT_RATIOS = (0.90, 0.05, 0.05)  # Train / Val / Test
 
 # 4. 通用配置
