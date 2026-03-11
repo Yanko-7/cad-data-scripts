@@ -38,6 +38,9 @@ from OCC.Core.TopTools import (
     TopTools_IndexedMapOfShape,
 )
 from OCC.Extend.DataExchange import read_step_file
+import os
+from OCC.Extend.DataExchange import write_step_file
+from OCC.Extend.TopologyUtils import TopologyExplorer
 
 
 def estimate_token_count(n_faces: int, n_edges: int) -> int:
@@ -654,6 +657,36 @@ def get_fast_stats(shape):
         face_edge_counts.append(local_map_e.Size())
 
     return total_faces, total_edges, face_edge_counts
+
+
+def get_topo_count(shape, topo_type):
+    topo_map = TopTools_IndexedMapOfShape()
+    topexp.MapShapes(shape, topo_type, topo_map)
+    return topo_map.Size()
+
+
+def split_and_classify_step(input_file, base_dir="output_solids", bin_size=30):
+    file_id = os.path.basename(input_file)[:8]
+    shape = read_step_file(input_file)
+
+    for count, solid in enumerate(TopologyExplorer(shape).solids(), 1):
+        fixer = ShapeFix_Shape(solid)
+        fixer.Perform()
+        fixed_solid = topods.Solid(fixer.Shape())
+
+        if BRepCheck_Analyzer(fixed_solid).IsValid():
+            faces = get_topo_count(fixed_solid, TopAbs_FACE)
+            edges = get_topo_count(fixed_solid, TopAbs_EDGE)
+
+            lower = (faces // bin_size) * bin_size
+            upper = lower + bin_size - 1
+            out_dir = os.path.join(base_dir, f"faces_{lower}_{upper}")
+            os.makedirs(out_dir, exist_ok=True)
+
+            out_name = f"{file_id}_{count}_{faces}_{edges}.step"
+            out_path = os.path.join(out_dir, out_name)
+
+            write_step_file(fixed_solid, out_path)
 
 
 def get_info_pipeline(file_path):
