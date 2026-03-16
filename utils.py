@@ -2,17 +2,22 @@ import numpy as np
 from OCC.Core import TopoDS
 from OCC.Core.BRep import BRep_Builder, BRep_Tool
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_NurbsConvert
 from OCC.Core.BRepCheck import BRepCheck_Analyzer, BRepCheck_ListIteratorOfListOfStatus
-from OCC.Core.BRepTools import BRepTools_WireExplorer, breptools
+from OCC.Core.BRepTools import BRepTools_ReShape, BRepTools_WireExplorer, breptools
 from OCC.Core.Geom import (
     Geom_BezierCurve,
     Geom_BezierSurface,
     Geom_RectangularTrimmedSurface,
     Geom_TrimmedCurve,
 )
-from OCC.Core.GeomAbs import GeomAbs_C1, GeomAbs_C2
-from OCC.Core.GeomConvert import geomconvert
+from OCC.Core.Geom import Geom_BSplineCurve, Geom_BSplineSurface
+from OCC.Core.GeomAbs import GeomAbs_C1, GeomAbs_C2, GeomAbs_C0
+from OCC.Core.GeomConvert import (
+    GeomConvert_BSplineCurveToBezierCurve,
+    GeomConvert_BSplineSurfaceToBezierSurface,
+    geomconvert,
+)
 from OCC.Core.Precision import precision
 from OCC.Core.ShapeCustom import ShapeCustom_RestrictionParameters, shapecustom
 from OCC.Core.ShapeFix import ShapeFix_Shape
@@ -255,82 +260,128 @@ def extract_primitive(shape: TopoDS_Shape):
     }
 
 
-def get_face_controls(face):
-    """
-    提取 Face 的 4x4 控制点。
-    严格要求：必须是单片 Bicubic 曲面。如果包含多个段或度数 >3，抛出异常。
-    """
+def convert_special_surface(surf, u1, u2, v1, v2):
+    trimmed = Geom_RectangularTrimmedSurface(surf, u1, u2, v1, v2)
+    bspline = geomconvert.SurfaceToBSplineSurface(trimmed)
+    if bspline is None:
+        raise ValueError("严重错误：截断曲面转 B-Spline 失败。")
+    converter = GeomConvert_BSplineSurfaceToBezierSurface(bspline)
+    nb_u = converter.NbUPatches()
+    nb_v = converter.NbVPatches()
+    if nb_u > 1 or nb_v > 1:
+        raise ValueError(
+            f"严格限制：该 B-Spline 曲面包含内部节点，会被切分为 {nb_u}x{nb_v} 个 Bezier 面，拒绝处理！"
+        )
+    bspline = geomconvert.SurfaceToBSplineSurface(converter.Patch(1, 1))
+    return bspline
+
+
+def extract_bicubic_surf_patches(face):
     face_ds = topods.Face(face)
     surf = BRep_Tool.Surface(face_ds)
+
+    surf_type = surf.DynamicType().Name()
+
     u1, u2, v1, v2 = breptools.UVBounds(face_ds)
+    if (
+        precision.IsInfinite(u1)
+        or precision.IsInfinite(u2)
+        or precision.IsInfinite(v1)
+        or precision.IsInfinite(v2)
+    ):
+        raise ValueError("Invalid UV bounds for face.")
 
-    # 1. 裁剪: 强制将无界或大曲面限制在 UVBox 内
-    if precision.IsInfinite(u1) or precision.IsInfinite(u2):
-        raise ValueError("Face has infinite UV bounds.")
+    if surf_type == "Geom_BSplineSurface":
+        bspline = Geom_BSplineSurface.DownCast(surf)
+    elif surf_type == "Geom_BezierSurface":
+        bezier = Geom_BezierSurface.DownCast(surf)
+        bspline = geomconvert.SurfaceToBSplineSurface(bezier)
+    else:
+        bspline = convert_special_surface(surf, u1, u2, v1, v2)
 
-    # 使用 TrimmedSurface 确保只转换有效区域
-    trimmed_surf = Geom_RectangularTrimmedSurface(surf, u1, u2, v1, v2)
-    bspline = geomconvert.SurfaceToBSplineSurface(trimmed_surf)
+    bspline.Segment(u1, u2, v1, v2)
 
-    # 2. 升阶: 确保至少是 Cubic (3)
-    # 注意：如果原曲面已经是 >3 的（如 5阶），IncreaseDegree 不会降阶，保持原样
     if bspline.UDegree() < 3 or bspline.VDegree() < 3:
         bspline.IncreaseDegree(max(3, bspline.UDegree()), max(3, bspline.VDegree()))
 
-    # 3. 验证: 严格检查是否为单片 4x4
-    # 如果 NbPoles > 4，说明存在 Knots (多段)，不符合单一 Bicubic 定义
     if bspline.NbUPoles() != 4 or bspline.NbVPoles() != 4:
         raise ValueError(
-            f"Strict Bicubic Check Failed: Face is complex ({bspline.NbUPoles()}x{bspline.NbVPoles()} poles). "
-            "Expected exactly 4x4. Please split geometry first."
+            f"Not a single Bicubic patch: {bspline.NbUPoles()}x{bspline.NbVPoles()}"
         )
 
-    # 4. 变换: 应用 Face 的位置矩阵
     bspline.Transform(face_ds.Location().Transformation())
+    is_rational = bspline.IsURational() or bspline.IsVRational()
 
-    # 5. 提取
     poles = []
-    for i in range(1, 5):  # 1..4
+    for i in range(1, 5):
         row = []
-        for j in range(1, 5):  # 1..4
+        for j in range(1, 5):
             p = bspline.Pole(i, j)
-            row.append([p.X(), p.Y(), p.Z()])
+            w = bspline.Weight(i, j) if is_rational else 1.0
+            row.append([p.X(), p.Y(), p.Z(), w])
         poles.append(row)
 
     return np.array(poles, dtype=np.float32)
 
 
-def get_edge_controls(edge):
-    """
-    提取 Edge 的 4 个控制点。
-    严格要求：必须是单段 Cubic 曲线。
-    """
+def convert_special_curve(crv, first, last):
+    trimmed_crv = Geom_TrimmedCurve(crv, first, last)
+
+    bspline_crv = geomconvert.CurveToBSplineCurve(trimmed_crv)
+    if bspline_crv is None:
+        raise ValueError("截断曲线转 B-Spline 失败。")
+
+    converter = GeomConvert_BSplineCurveToBezierCurve(bspline_crv)
+
+    nb_arcs = converter.NbArcs()
+
+    if nb_arcs > 1:
+        raise ValueError(
+            f"严格限制：该 B-Spline 曲线包含内部节点，会被切分为 {nb_arcs} 段 Bezier 曲线，拒绝处理！"
+        )
+    bezier_crv = converter.Arc(1)
+    if bezier_crv is None:
+        raise ValueError("提取 Bezier 曲线段失败。")
+    return geomconvert.CurveToBSplineCurve(bezier_crv)
+
+
+def extract_bicubic_curv_patches(edge):
     edge_ds = topods.Edge(edge)
     curve, t1, t2 = BRep_Tool.Curve(edge_ds)
+    if curve is None:
+        raise ValueError(
+            "严重错误：该 Edge 没有底层的 3D 曲线 (可能是退化边 Degenerated Edge)。"
+        )
 
     if precision.IsInfinite(t1) or precision.IsInfinite(t2):
-        raise ValueError("Edge has infinite parameters.")
+        raise ValueError("Invalid bounds for curve (Infinite).")
 
-    # 1. 裁剪 & 转换
-    trimmed_curve = Geom_TrimmedCurve(curve, t1, t2)
-    bspline = geomconvert.CurveToBSplineCurve(trimmed_curve)
+    curve_type = curve.DynamicType().Name()
 
-    # 2. 升阶
+    if curve_type == "Geom_BSplineCurve":
+        bspline = Geom_BSplineCurve.DownCast(curve)
+    elif curve_type == "Geom_BezierCurve":
+        bezier = Geom_BezierCurve.DownCast(curve)
+        bspline = geomconvert.CurveToBSplineCurve(bezier)
+    else:
+        bspline = convert_special_curve(curve, t1, t2)
+
+    bspline.Segment(t1, t2)
     if bspline.Degree() < 3:
         bspline.IncreaseDegree(3)
 
-    # 3. 验证: 严格检查是否为单段 4点
     if bspline.NbPoles() != 4:
-        raise ValueError(
-            f"Strict Cubic Check Failed: Edge has {bspline.NbPoles()} poles. "
-            "Expected exactly 4. Edge might cover multiple knot spans."
-        )
+        raise ValueError(f"Not a single Cubic curve: {bspline.NbPoles()}")
 
-    # 4. 变换
     bspline.Transform(edge_ds.Location().Transformation())
+    is_rational = bspline.IsRational()
 
-    # 5. 提取
-    poles = [bspline.Pole(i).Coord() for i in range(1, 5)]
+    poles = []
+    for i in range(1, 5):
+        p = bspline.Pole(i)
+        w = bspline.Weight(i) if is_rational else 1.0
+        poles.append([p.X(), p.Y(), p.Z(), w])
+
     return np.array(poles, dtype=np.float32)
 
 
@@ -358,7 +409,7 @@ def extract_bicubic_features(shape: TopoDS_Shape):
     while face_exp.More():
         face = topods.Face(face_exp.Current())
 
-        face_controls.append(get_face_controls(face))
+        face_controls.append(extract_bicubic_surf_patches(face))
 
         outer_wire = breptools.OuterWire(face)
         wire_exp = TopExp_Explorer(face, TopAbs_WIRE)
@@ -369,14 +420,14 @@ def extract_bicubic_features(shape: TopoDS_Shape):
 
             loop_edge_ids = []
 
-            edge_exp = BRepTools_WireExplorer(wire, TopAbs_EDGE)
+            edge_exp = BRepTools_WireExplorer(wire)
             while edge_exp.More():
                 edge = topods.Edge(edge_exp.Current())
 
                 e_idx = edge_map.FindIndex(edge)
                 if e_idx == 0:
                     e_idx = edge_map.Add(edge)
-                    edge_controls.append(get_edge_controls(edge))
+                    edge_controls.append(extract_bicubic_curv_patches(edge))
                     edge_to_face_map[e_idx - 1] = []
 
                 global_id = e_idx - 1
@@ -404,42 +455,27 @@ def extract_bicubic_features(shape: TopoDS_Shape):
         face_idx += 1
         face_exp.Next()
 
-    # 4. 构建邻接矩阵 (Strictly Manifold)
-    num_edges = edge_map.Size()
-    edge_adjacency = []
-    for i in range(num_edges):
-        faces = edge_to_face_map.get(i, [])
-        if len(faces) != 2:
-            raise ValueError(
-                f"Topology Error: Edge {i} has {len(faces)} faces. Expected 2."
-            )
-        edge_adjacency.append(faces)
-
-    # 5. 归一化处理
     try:
         face_controls = np.array(face_controls, dtype=np.float32)
         edge_controls = np.array(edge_controls, dtype=np.float32)
 
-        # 合并计算 Bounding Box
-        all_pts = face_controls.reshape(-1, 3)
+        all_pts_4d = face_controls.reshape(-1, 4)
         if edge_controls.size > 0:
-            all_pts = np.concatenate([all_pts, edge_controls.reshape(-1, 3)])
+            all_pts_4d = np.concatenate([all_pts_4d, edge_controls.reshape(-1, 4)])
 
-        if all_pts.size > 0:
-            vmin, vmax = all_pts.min(axis=0), all_pts.max(axis=0)
-            center = (vmin + vmax) / 2
+        if all_pts_4d.size > 0:
+            xyz_physical = all_pts_4d[:, :3]
+            vmin, vmax = xyz_physical.min(axis=0), xyz_physical.max(axis=0)
+            center = (vmin + vmax) / 2.0
             scale = 2.0 / (np.max(vmax - vmin) + 1e-8)
-
-            face_controls = (face_controls - center) * scale
-            edge_controls = (edge_controls - center) * scale
-
+            face_controls[..., :3] = (face_controls[..., :3] - center) * scale
+            if edge_controls.size > 0:
+                edge_controls[..., :3] = (edge_controls[..., :3] - center) * scale
     except Exception as e:
         raise ValueError(f"Normalization failed: {e}")
-
     return {
-        "face_controls": face_controls,  # [F, 4, 4, 3]
-        "edge_controls": edge_controls,  # [E, 4, 3]
-        "edge_adjacency": np.array(edge_adjacency, dtype=np.int32),
+        "face_controls": face_controls,  # [F, 4, 4, 4]
+        "edge_controls": edge_controls,  # [E, 4, 4]
         "outer_edge_indices": np.array(outer_edge_indices, dtype=np.int32),
         "face_outer_offsets": np.array(face_outer_offsets, dtype=np.int32),
         "inner_edge_indices": np.array(inner_edge_indices, dtype=np.int32),
@@ -535,39 +571,21 @@ def print_shape_errors(shape):
 
 
 def split_to_bicubic(shape):
+
     shape = BRepBuilderAPI_NurbsConvert(shape).Shape()
     params = ShapeCustom_RestrictionParameters()
     shape = shapecustom.BSplineRestriction(
-        shape, 1e-3, 1e-4, 3, 100, GeomAbs_C2, GeomAbs_C1, True, False, params
+        shape, 0.05, 0.005, 3, 4, GeomAbs_C0, GeomAbs_C0, True, False, params
     )
-
+    fixer = ShapeFix_Shape(shape)
+    fixer.Perform()
+    shape = fixer.Shape()
     converter = ShapeUpgrade_ShapeConvertToBezier(shape)
     converter.SetSurfaceConversion(True)
     converter.Set2dConversion(True)
     converter.Set3dConversion(True)
     converter.Perform()
     split_shape = converter.Result()
-
-    ex = TopExp_Explorer(split_shape, TopAbs_FACE)
-    while ex.More():
-        face = topods.Face(ex.Current())
-        srf = BRep_Tool.Surface(face)
-        bezier = Geom_BezierSurface.DownCast(srf)
-        if bezier:
-            u, v = bezier.UDegree(), bezier.VDegree()
-            if u < 3 or v < 3:
-                bezier.Increase(max(3, u), max(3, v))
-        ex.Next()
-
-    ex = TopExp_Explorer(split_shape, TopAbs_EDGE)
-    while ex.More():
-        edge = topods.Edge(ex.Current())
-        crv, _, _ = BRep_Tool.Curve(edge)
-        bezier = Geom_BezierCurve.DownCast(crv)
-        if bezier and bezier.Degree() < 3:
-            bezier.Increase(3)
-        ex.Next()
-
     fixer = ShapeFix_Shape(split_shape)
     fixer.Perform()
     return fixer.Shape()
@@ -691,8 +709,8 @@ def split_and_classify_step(input_file, base_dir="output_solids", bin_size=30):
 
 def get_info_pipeline(file_path):
     shape = load_and_filter_step(file_path)
-    shape = preprocess_shape(shape)
     shape = split_to_bicubic(shape)
+    shape = preprocess_shape(shape)
     print_shape_errors(shape)
     check_validity(shape)
     check_euler_poincare(shape)

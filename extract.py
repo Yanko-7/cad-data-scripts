@@ -1,169 +1,155 @@
 import os
+import gc
 import argparse
 import logging
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
-from concurrent.futures import TimeoutError
+from concurrent.futures import TimeoutError, as_completed
 from pebble import ProcessPool, ProcessExpired
+
 from utils import (
-    check_euler_poincare,
     check_validity,
     extract_bicubic_features,
     get_fast_stats,
+    is_watertight,
     load_and_filter_step,
     preprocess_shape,
-    extract_primitive,
     split_to_bicubic,
 )
 
-MAX_FACES = 100
-PERFACE_EDGE = 50
+MAX_FACES = 300
+MAX_EDGES = 2000
+PERFACE_EDGE = 40
 
 
-def worker_task(file_path, output_dir):
-    """
-    运行在子进程中的任务
-    返回: (状态, 信息)
-    """
-    file_path = Path(file_path)
+def worker_task(file_path_str, output_dir_str):
+    gc.disable()
+    file_path = Path(file_path_str)
     base_name = file_path.stem
-    output_dir = Path(output_dir)
+    shard_dir = Path(output_dir_str) / base_name[:2]
+    shard_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- [断点续传] ---
-    # 只要输出目录存在该文件名的任意版本 (.npz)，直接跳过
-    # 相比于在主进程 glob，这里虽然多了一点点 IO，但代码解耦得更好
-    existing = list(output_dir.glob(f"{base_name}_*.npz"))
-    if existing:
+    final_path = shard_dir / f"{base_name}.npz"
+    if final_path.exists():
         return "SKIPPED", None
 
     try:
         shape = load_and_filter_step(str(file_path))
-        total_faces, total_edges, face_edge_counts = get_fast_stats(shape)
-        if total_faces > MAX_FACES or any(c > PERFACE_EDGE for c in face_edge_counts):
-            return (
-                "SKIPPED",
-                f"Too complex: {total_faces} faces, max {max(face_edge_counts)} edges/face",
-            )
-        shape = preprocess_shape(shape)
-        shape = split_to_bicubic(shape)
-        check_validity(shape)
-        check_euler_poincare(shape)
-        data = extract_bicubic_features(shape)
-        total_faces, total_edges, face_edge_counts = get_fast_stats(shape)
-        if total_faces > MAX_FACES or any(c > PERFACE_EDGE for c in face_edge_counts):
-            return (
-                "SKIPPED",
-                f"Too complex: {total_faces} faces, max {max(face_edge_counts)} edges/face",
-            )
-        f_count = total_faces
-        e_count = total_edges
+        shape = preprocess_shape(split_to_bicubic(shape))
 
-        # 5. 保存结果
-        save_name = output_dir / f"{base_name}_{f_count}_{e_count}.npz"
-        np.savez_compressed(save_name, **data)
+        if not is_watertight(shape):
+            return "SKIPPED", "Not watertight"
+
+        check_validity(shape)
+        f_count, e_count, counts = get_fast_stats(shape)
+
+        # 二次校验：确保处理后拓扑依然满足限制
+        if (
+            f_count > MAX_FACES
+            or e_count > MAX_EDGES
+            or any(c > PERFACE_EDGE for c in counts)
+        ):
+            return "SKIPPED", "Too complex post-process"
+
+        data = extract_bicubic_features(shape)
+        data["f_count"] = np.array([f_count], dtype=np.int32)
+        data["e_count"] = np.array([e_count], dtype=np.int32)
+
+        temp_path = shard_dir / f"{base_name}.tmp.npz"
+        np.savez_compressed(temp_path, **data)
+        temp_path.replace(final_path)
 
         return "SUCCESS", None
-
     except Exception as e:
-        # 捕获常规逻辑错误 (如几何无效、空文件等)
         return "ERROR", str(e)
 
 
-# ==========================================
-# 4. 主程序：并行调度与异常管理
-# ==========================================
+def filter_and_dedup(file_paths):
+    filtered = {}
+    for f in file_paths:
+        parts = f.stem.split("_")
+        if len(parts) != 4:
+            continue
+        try:
+            model_id, faces, edges = parts[0], int(parts[2]), int(parts[3])
+            if faces <= MAX_FACES and edges <= MAX_EDGES:
+                key = (model_id, faces, edges)
+                if key not in filtered:
+                    filtered[key] = f
+        except ValueError:
+            continue
+    return list(filtered.values())
+
+
+def chunker(seq, size):
+    for pos in range(0, len(seq), size):
+        yield seq[pos : pos + size]
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Robust STEP Processor")
-    parser.add_argument("--input", "-i", required=True, help="Input folder")
-    parser.add_argument("--output", "-o", required=True, help="Output folder")
-    parser.add_argument(
-        "--workers", "-w", type=int, default=os.cpu_count(), help="Num processes"
-    )
-    parser.add_argument(
-        "--timeout", "-t", type=int, default=100, help="Timeout per file (seconds)"
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input", required=True)
+    parser.add_argument("-o", "--output", required=True)
+    parser.add_argument("-w", "--workers", type=int, default=os.cpu_count() - 4)
+    parser.add_argument("-t", "--timeout", type=int, default=120)
     args = parser.parse_args()
 
-    input_dir = Path(args.input)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # 配置错误日志
+    in_dir, out_dir = Path(args.input), Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
-        filename=output_dir / "processing_failures.log",
+        filename=out_dir / "failures.log",
         level=logging.ERROR,
-        format="%(asctime)s - %(message)s",
+        format="%(asctime)s|%(message)s",
     )
 
-    print(f"[INFO] Scanning files in {input_dir} ...")
-    files = list(input_dir.glob("**/*.step"))
-    total_files = len(files)
-    print(
-        f"[INFO] Found {total_files} files. Workers: {args.workers}, Timeout: {args.timeout}s"
-    )
+    print("[INFO] Scanning and pre-filtering files...")
+    raw_files = in_dir.rglob("*.step")
+    files = filter_and_dedup(raw_files)
 
-    # 统计计数器
-    stats = {"success": 0, "skipped": 0, "error": 0, "crash": 0, "timeout": 0}
+    total = len(files)
+    batch_size = args.workers * 500
+    stats = {"SUCCESS": 0, "SKIPPED": 0, "ERROR": 0, "CRASH": 0, "TIMEOUT": 0}
 
-    # --- Pebble 并行池 ---
-    with ProcessPool(max_workers=args.workers) as pool:
-        # 1. 提交任务
-        future_map = {}
-        for f in files:
-            # schedule 立即返回 future 对象
-            future = pool.schedule(
-                worker_task, args=(f, output_dir), timeout=args.timeout
-            )
-            future_map[future] = f
+    print(f"Target Files: {total} | Workers: {args.workers} | Batch: {batch_size}")
 
-        # 2. 处理结果 (带进度条)
-        pbar = tqdm(total=total_files, unit="file", smoothing=0.1)
+    with tqdm(total=total, smoothing=0.1) as pbar:
+        for chunk in chunker(files, batch_size):
+            with ProcessPool(max_workers=args.workers, max_tasks=500) as pool:
+                futures = {
+                    pool.schedule(
+                        worker_task, args=(str(f), str(out_dir)), timeout=args.timeout
+                    ): f
+                    for f in chunk
+                }
 
-        for future in future_map:
-            file_path = future_map[future]
-            try:
-                # 获取结果 (如果超时或崩溃，这里会抛出异常)
-                status, msg = future.result()
+                for future in as_completed(futures):
+                    f_name = futures[future].name
+                    try:
+                        status, msg = future.result()
+                        stats[status] += 1
+                        if status == "ERROR":
+                            logging.error(f"ERROR|{f_name}|{msg}")
+                    except TimeoutError:
+                        stats["TIMEOUT"] += 1
+                        logging.error(f"TIMEOUT|{f_name}")
+                    except ProcessExpired:
+                        stats["CRASH"] += 1
+                        logging.error(f"CRASH|{f_name}")
+                    except Exception as e:
+                        stats["ERROR"] += 1
+                        logging.error(f"UNKNOWN|{f_name}|{e}")
 
-                if status == "SUCCESS":
-                    stats["success"] += 1
-                elif status == "SKIPPED":
-                    stats["skipped"] += 1
-                else:  # ERROR
-                    stats["error"] += 1
-                    logging.error(f"ERROR | {file_path.name} | {msg}")
+                    pbar.set_postfix(
+                        ok=stats["SUCCESS"],
+                        skip=stats["SKIPPED"],
+                        fail=stats["ERROR"] + stats["CRASH"] + stats["TIMEOUT"],
+                    )
+                    pbar.update(1)
 
-            except TimeoutError:
-                stats["timeout"] += 1
-                logging.error(f"TIMEOUT | {file_path.name} | Exceeded {args.timeout}s")
-
-            except ProcessExpired:
-                stats["crash"] += 1
-                logging.error(f"CRASH | {file_path.name} | Segfault/Hard Crash")
-
-            except Exception as e:
-                stats["error"] += 1
-                logging.error(f"UNKNOWN | {file_path.name} | {e}")
-
-            # 更新进度条描述
-            pbar.set_postfix(
-                ok=stats["success"],
-                skip=stats["skipped"],
-                fail=stats["error"] + stats["crash"] + stats["timeout"],
-            )
-            pbar.update(1)
-
-        pbar.close()
-
-    print("\n" + "=" * 40)
-    print("Processing Complete.")
-    print(f"Success : {stats['success']}")
-    print(f"Skipped : {stats['skipped']}")
-    print(f"Errors  : {stats['error']} (Check logs)")
-    print(f"Crashes : {stats['crash']} (Segfaults)")
-    print(f"Timeouts: {stats['timeout']}")
-    print("=" * 40)
+    print("\n--- Done ---")
+    for k, v in stats.items():
+        print(f"{k}: {v}")
 
 
 if __name__ == "__main__":
