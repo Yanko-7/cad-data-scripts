@@ -1,0 +1,126 @@
+# =========================
+# Python 字节码和缓存
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# C 扩展
+# =========================
+*.so
+
+# =========================
+# 打包和分发 (Distribution / packaging)
+# =========================
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# =========================
+# 虚拟环境 (Virtual Environments)
+# =========================
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =========================
+# 环境变量 (Environment variables)
+# 强烈建议忽略包含机密的 .env 文件
+# =========================
+.env
+.env.local
+.env.*.local
+
+# =========================
+# 单元测试和覆盖率 (Unit test / coverage)
+# =========================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# =========================
+# Jupyter Notebook / IPython
+# =========================
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# =========================
+# 常见框架特定的文件
+# =========================
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy
+
+# Sphinx 文档
+docs/_build/
+
+# =========================
+# 类型检查 (Type checking)
+# =========================
+.mypy_cache/
+.pyre/
+.typeguard/
+
+# =========================
+# 编辑器和 IDE 配置 (IDEs)
+# =========================
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+
+# =========================
+# 操作系统生成文件 (OS specific)
+# =========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+ehthumbs_vista.db
+[Tt]humbs.db
