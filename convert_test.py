@@ -1,10 +1,9 @@
 import numpy as np
 
-from inference import render_and_save, render_and_save_html
-from src.data.brep_utils import arrays_to_sequence, normalize_points_with_bbox
+from inference import  render_and_save_html
+from src.data.brep_utils import  normalize_points_with_bbox
 from OCC.Extend.DataExchange import write_step_file
 from utils import (
-    check_euler_poincare,
     check_validity,
     extract_bicubic_features,
     load_and_filter_step,

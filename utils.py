@@ -2,9 +2,9 @@ import numpy as np
 from OCC.Core import TopoDS
 from OCC.Core.BRep import BRep_Builder, BRep_Tool
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_NurbsConvert
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
 from OCC.Core.BRepCheck import BRepCheck_Analyzer, BRepCheck_ListIteratorOfListOfStatus
-from OCC.Core.BRepTools import BRepTools_ReShape, BRepTools_WireExplorer, breptools
+from OCC.Core.BRepTools import BRepTools_WireExplorer, breptools
 from OCC.Core.Geom import (
     Geom_BezierCurve,
     Geom_BezierSurface,
@@ -12,7 +12,7 @@ from OCC.Core.Geom import (
     Geom_TrimmedCurve,
 )
 from OCC.Core.Geom import Geom_BSplineCurve, Geom_BSplineSurface
-from OCC.Core.GeomAbs import GeomAbs_C1, GeomAbs_C2, GeomAbs_C0
+from OCC.Core.GeomAbs import GeomAbs_C0, GeomAbs_C2
 from OCC.Core.GeomConvert import (
     GeomConvert_BSplineCurveToBezierCurve,
     GeomConvert_BSplineSurfaceToBezierSurface,
@@ -46,6 +46,10 @@ from OCC.Extend.DataExchange import read_step_file
 import os
 from OCC.Extend.DataExchange import write_step_file
 from OCC.Extend.TopologyUtils import TopologyExplorer
+from OCC.Core.GeomAPI import GeomAPI_PointsToBSplineSurface
+from OCC.Core.TColgp import TColgp_Array2OfPnt
+from OCC.Core.GeomAPI import GeomAPI_PointsToBSpline
+from OCC.Core.TColgp import TColgp_Array1OfPnt
 
 
 def estimate_token_count(n_faces: int, n_edges: int) -> int:
@@ -594,10 +598,11 @@ def split_to_bicubic(shape):
 def load_and_filter_step(filename):
     try:
         origin_shape = read_step_file(filename)
+
         fixer = ShapeFix_Shape(origin_shape)
         fixer.Perform()
         shape = fixer.Shape()
-        shape = get_most_complex_subshape(shape)
+        # shape = get_most_complex_subshape(shape)
     except Exception as e:
         raise ValueError(f"Failed to load STEP file: {e}")
     analyzer = BRepCheck_Analyzer(shape)
@@ -718,3 +723,251 @@ def get_info_pipeline(file_path):
 
 
 # print(get_info_pipeline("test.step"))
+
+
+def extract_or_fit_bicubic_patch(face) -> np.ndarray:
+    face_ds = topods.Face(face)
+    u1, u2, v1, v2 = breptools.UVBounds(face_ds)
+    if any(map(precision.IsInfinite, (u1, u2, v1, v2))):
+        raise ValueError("Invalid UV bounds for face.")
+
+    surf = BRep_Tool.Surface(face_ds)
+    bspline = None
+
+    # 1. 尝试直接提取并转换为单一 Bicubic B-Spline 面片
+    try:
+        surf_type = surf.DynamicType().Name()
+        if surf_type == "Geom_BSplineSurface":
+            copied_surf = surf.Copy()
+            bspline = Geom_BSplineSurface.DownCast(copied_surf)
+        elif surf_type == "Geom_BezierSurface":
+            bspline = geomconvert.SurfaceToBSplineSurface(
+                Geom_BezierSurface.DownCast(surf)
+            )
+        else:
+            trimmed = Geom_RectangularTrimmedSurface(surf, u1, u2, v1, v2)
+            bspline = geomconvert.SurfaceToBSplineSurface(trimmed)
+            conv = GeomConvert_BSplineSurfaceToBezierSurface(bspline)
+            if conv.NbUPatches() == 1 and conv.NbVPatches() == 1:
+                bspline = geomconvert.SurfaceToBSplineSurface(conv.Patch(1, 1))
+
+        if bspline:
+            bspline.Segment(u1, u2, v1, v2)
+            bspline.IncreaseDegree(max(3, bspline.UDegree()), max(3, bspline.VDegree()))
+            if bspline.NbUPoles() != 4 or bspline.NbVPoles() != 4:
+                bspline = None
+    except Exception:
+        bspline = None
+
+    # 2. 回退方案：采样 4x4 个点进行双三次拟合 (4点插值必定生成 Degree 3 且无内部节点)
+    if not bspline:
+        bspline = point2bspline(face_ds, u1, u2, v1, v2)
+        if bspline is None:
+            raise RuntimeError("Fallback B-Spline surface fitting failed.")
+
+    # 3. 施加变换并提取权重与控制点
+    bspline.Transform(face_ds.Location().Transformation())
+    is_rational = bspline.IsURational() or bspline.IsVRational()
+    assert bspline.NbUPoles() == 4 and bspline.NbVPoles() == 4, (
+        "Final B-Spline surface must have exactly 4x4 poles."
+    )
+    poles = np.zeros((4, 4, 4), dtype=np.float32)
+    for i in range(1, 5):
+        for j in range(1, 5):
+            p = bspline.Pole(i, j)
+            w = bspline.Weight(i, j) if is_rational else 1.0
+            poles[i - 1, j - 1] = [p.X(), p.Y(), p.Z(), w]
+
+    return poles
+
+
+def point2bspline_curve(edge_ds, t1, t2) -> Geom_BSplineCurve:
+    pts = TColgp_Array1OfPnt(1, 16)
+    adaptor = BRepAdaptor_Curve(edge_ds)
+    for i, t in enumerate(np.linspace(t1, t2, 16), 1):
+        pts.SetValue(i, adaptor.Value(float(t)))
+    try:
+        tol = 1e-4
+        for i in range(16):
+            fitter = GeomAPI_PointsToBSpline(pts, 3, 3, GeomAbs_C2, tol)
+            if fitter.IsDone() and fitter.Curve().NbPoles() == 4:
+                return fitter.Curve()
+            tol *= 2
+    except Exception as e:
+        raise RuntimeError(f"B-Spline Curve fitting error: {e}")
+    return None
+
+
+def point2bspline(face_ds, u1, u2, v1, v2) -> Geom_BSplineSurface:
+    pts = TColgp_Array2OfPnt(1, 4, 1, 4)
+    adaptor = BRepAdaptor_Surface(face_ds)
+    for i, u in enumerate(np.linspace(u1, u2, 4), 1):
+        for j, v in enumerate(np.linspace(v1, v2, 4), 1):
+            pts.SetValue(i, j, adaptor.Value(float(u), float(v)))
+    try:
+        tol = 1e-4
+        for i in range(8):
+            fitter = GeomAPI_PointsToBSplineSurface(pts, 3, 3, GeomAbs_C2, tol)
+            if (
+                fitter.IsDone()
+                and fitter.Surface().NbUPoles() == 4
+                and fitter.Surface().NbVPoles() == 4
+            ):
+                return fitter.Surface()
+            tol *= 2
+    except Exception as e:
+        raise RuntimeError(f"B-Spline surface fitting error: {e}")
+    return None
+
+
+def extract_or_fit_cubic_curve(edge) -> np.ndarray:
+    edge_ds = topods.Edge(edge)
+    curve, t1, t2 = BRep_Tool.Curve(edge_ds)
+
+    if curve is None:
+        raise ValueError("Edge has no underlying 3D curve.")
+    if any(map(precision.IsInfinite, (t1, t2))):
+        raise ValueError("Invalid bounds for curve (Infinite).")
+
+    bspline = None
+
+    # 1. 尝试直接提取并转换为单一 Cubic B-Spline 曲线段
+    try:
+        curve_type = curve.DynamicType().Name()
+        if curve_type == "Geom_BSplineCurve":
+            copied_curve = curve.Copy()
+            bspline = Geom_BSplineCurve.DownCast(copied_curve)
+        elif curve_type == "Geom_BezierCurve":
+            bspline = geomconvert.CurveToBSplineCurve(Geom_BezierCurve.DownCast(curve))
+        else:
+            trimmed = Geom_TrimmedCurve(curve, t1, t2)
+            bspline = geomconvert.CurveToBSplineCurve(trimmed)
+            conv = GeomConvert_BSplineCurveToBezierCurve(bspline)
+            if conv.NbArcs() == 1:
+                bspline = geomconvert.CurveToBSplineCurve(conv.Arc(1))
+
+        if bspline:
+            bspline.Segment(t1, t2)
+            bspline.IncreaseDegree(max(3, bspline.Degree()))
+            # 严格校验：单一三次曲线控制点必为 4
+            if bspline.NbPoles() != 4:
+                bspline = None
+    except Exception:
+        bspline = None
+
+    # 2. 回退方案：采样 4 个点进行三次拟合 (4点插值必定生成 Degree 3 且无内部节点的线)
+    if not bspline:
+        bspline = point2bspline_curve(edge_ds, t1, t2)
+        if bspline is None:
+            raise RuntimeError("Fallback B-Spline fitting failed.")
+
+    # 3. 施加变换并提取权重与控制点
+    bspline.Transform(edge_ds.Location().Transformation())
+    is_rational = bspline.IsRational()
+    assert bspline.NbPoles() == 4, "Final B-Spline curve must have exactly 4 poles."
+    poles = np.zeros((4, 4), dtype=np.float32)
+    for i in range(1, 5):
+        p = bspline.Pole(i)
+        w = bspline.Weight(i) if is_rational else 1.0
+        poles[i - 1] = [p.X(), p.Y(), p.Z(), w]
+
+    return poles
+
+
+def extract_bicubic_features_dir(shape: TopoDS_Shape):
+    edge_map = TopTools_IndexedMapOfShape()
+
+    # 核心数据：控制点 (Control Points / Poles)
+    face_controls = []  # Shape: [N_faces, 4, 4, 3]
+    edge_controls = []  # Shape: [N_edges, 4, 3]
+
+    # 拓扑结构：索引与偏移
+    outer_edge_indices = []
+    face_outer_offsets = [0]
+
+    inner_edge_indices = []
+    inner_loop_offsets = [0]
+    face_inner_offsets = [0]
+
+    # 临时映射：Edge ID -> [Face ID, ...]
+    edge_to_face_map = {}
+
+    face_exp = TopExp_Explorer(shape, TopAbs_FACE)
+    face_idx = 0
+
+    while face_exp.More():
+        face = topods.Face(face_exp.Current())
+
+        face_controls.append(extract_or_fit_bicubic_patch(face))
+
+        outer_wire = breptools.OuterWire(face)
+        wire_exp = TopExp_Explorer(face, TopAbs_WIRE)
+
+        while wire_exp.More():
+            wire = topods.Wire(wire_exp.Current())
+            is_outer = wire.IsSame(outer_wire)
+
+            loop_edge_ids = []
+
+            edge_exp = BRepTools_WireExplorer(wire)
+            while edge_exp.More():
+                edge = topods.Edge(edge_exp.Current())
+
+                e_idx = edge_map.FindIndex(edge)
+                if e_idx == 0:
+                    e_idx = edge_map.Add(edge)
+                    edge_controls.append(extract_or_fit_cubic_curve(edge))
+                    edge_to_face_map[e_idx - 1] = []
+
+                global_id = e_idx - 1
+                loop_edge_ids.append(global_id)
+
+                # 记录邻接
+                adj_faces = edge_to_face_map[global_id]
+                if not adj_faces or adj_faces[-1] != face_idx:
+                    adj_faces.append(face_idx)
+
+                edge_exp.Next()
+
+            # 3. 更新 Wire 拓扑
+            if is_outer:
+                outer_edge_indices.extend(loop_edge_ids)
+                face_outer_offsets.append(len(outer_edge_indices))
+            else:
+                if loop_edge_ids:
+                    inner_edge_indices.extend(loop_edge_ids)
+                    inner_loop_offsets.append(len(inner_edge_indices))
+
+            wire_exp.Next()
+
+        face_inner_offsets.append(len(inner_loop_offsets) - 1)
+        face_idx += 1
+        face_exp.Next()
+
+    try:
+        face_controls = np.array(face_controls, dtype=np.float32)
+        edge_controls = np.array(edge_controls, dtype=np.float32)
+
+        all_pts_4d = face_controls.reshape(-1, 4)
+        if edge_controls.size > 0:
+            all_pts_4d = np.concatenate([all_pts_4d, edge_controls.reshape(-1, 4)])
+
+        if all_pts_4d.size > 0:
+            xyz_physical = all_pts_4d[:, :3]
+            vmin, vmax = xyz_physical.min(axis=0), xyz_physical.max(axis=0)
+            center = (vmin + vmax) / 2.0
+            scale = 2.0 / (np.max(vmax - vmin) + 1e-8)
+            face_controls[..., :3] = (face_controls[..., :3] - center) * scale
+            if edge_controls.size > 0:
+                edge_controls[..., :3] = (edge_controls[..., :3] - center) * scale
+    except Exception as e:
+        raise ValueError(f"Normalization failed: {e}")
+    return {
+        "face_controls": face_controls,  # [F, 4, 4, 4]
+        "edge_controls": edge_controls,  # [E, 4, 4]
+        "outer_edge_indices": np.array(outer_edge_indices, dtype=np.int32),
+        "face_outer_offsets": np.array(face_outer_offsets, dtype=np.int32),
+        "inner_edge_indices": np.array(inner_edge_indices, dtype=np.int32),
+        "inner_loop_offsets": np.array(inner_loop_offsets, dtype=np.int32),
+        "face_inner_offsets": np.array(face_inner_offsets, dtype=np.int32),
+    }
