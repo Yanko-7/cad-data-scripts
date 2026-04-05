@@ -1,11 +1,6 @@
 import json
 from pathlib import Path
 
-#
-# with open("filtered_brep_abc_data_split_6bit_paths.json", "rb") as f:
-#     data = json.load(f)
-#     pickle.dump(data, open("filtered_brep_abc_data_split_6bit_paths.pkl", "wb"))
-
 SEARCH_ROOT = "/cache/yanko/dataset/abc-splited-bezier-all/organized"
 with open("train_val_test_split.json", "r") as f:
     split = json.load(f)

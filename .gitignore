@@ -31,6 +31,8 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+*.ply
+*.step
 
 # =========================
 # 虚拟环境 (Virtual Environments)
@@ -124,3 +126,8 @@ docs/_build/
 ehthumbs.db
 ehthumbs_vista.db
 [Tt]humbs.db
+
+
+*.npz
+*.npy
+*.png

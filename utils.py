@@ -12,7 +12,7 @@ from OCC.Core.Geom import (
     Geom_TrimmedCurve,
 )
 from OCC.Core.Geom import Geom_BSplineCurve, Geom_BSplineSurface
-from OCC.Core.GeomAbs import GeomAbs_C0, GeomAbs_C2
+from OCC.Core.GeomAbs import GeomAbs_C0, GeomAbs_C2,GeomAbs_C1
 from OCC.Core.GeomConvert import (
     GeomConvert_BSplineCurveToBezierCurve,
     GeomConvert_BSplineSurfaceToBezierSurface,
@@ -393,8 +393,8 @@ def extract_bicubic_features(shape: TopoDS_Shape):
     edge_map = TopTools_IndexedMapOfShape()
 
     # 核心数据：控制点 (Control Points / Poles)
-    face_controls = []  # Shape: [N_faces, 4, 4, 3]
-    edge_controls = []  # Shape: [N_edges, 4, 3]
+    face_controls = []  # Shape: [N_faces, 4, 4, 4]
+    edge_controls = []  # Shape: [N_edges, 4, 4]
 
     # 拓扑结构：索引与偏移
     outer_edge_indices = []
@@ -780,43 +780,57 @@ def extract_or_fit_bicubic_patch(face) -> np.ndarray:
 
     return poles
 
-
-def point2bspline_curve(edge_ds, t1, t2) -> Geom_BSplineCurve:
-    pts = TColgp_Array1OfPnt(1, 16)
+def _compute_tol(pts, is_curve):
+    pts = np.asarray(pts)
+    diag = np.linalg.norm(np.ptp(pts, axis=0))
+    if diag < 1e-10: 
+        return 1e-7
+    
+    cov = np.cov(pts.T)
+    extents = np.ptp(pts @ np.linalg.eigh(cov)[1], axis=0) if cov.ndim == 2 else np.ptp(pts, axis=0)
+    feat_size = np.sort(extents)[-1 if is_curve else -2]
+    
+    return np.clip(diag * 1e-3, 1e-7, feat_size * 0.2)
+    
+def point2bspline_curve(edge_ds, t1, t2):
     adaptor = BRepAdaptor_Curve(edge_ds)
+    pts = TColgp_Array1OfPnt(1, 16)
+    raw_pts = []
+    
     for i, t in enumerate(np.linspace(t1, t2, 16), 1):
-        pts.SetValue(i, adaptor.Value(float(t)))
-    try:
-        tol = 1e-4
-        for i in range(16):
-            fitter = GeomAPI_PointsToBSpline(pts, 3, 3, GeomAbs_C2, tol)
-            if fitter.IsDone() and fitter.Curve().NbPoles() == 4:
-                return fitter.Curve()
-            tol *= 2
-    except Exception as e:
-        raise RuntimeError(f"B-Spline Curve fitting error: {e}")
+        p = adaptor.Value(float(t))
+        pts.SetValue(i, p)
+        raw_pts.append([p.X(), p.Y(), p.Z()])
+        
+    tol = _compute_tol(raw_pts, is_curve=True)
+    
+    for _ in range(9):
+        fitter = GeomAPI_PointsToBSpline(pts, 3, 3, GeomAbs_C1, tol)
+        if fitter.IsDone() and fitter.Curve().NbPoles() == 4:
+            return fitter.Curve()
+        tol *= 2
+        
     return None
 
-
-def point2bspline(face_ds, u1, u2, v1, v2) -> Geom_BSplineSurface:
-    pts = TColgp_Array2OfPnt(1, 4, 1, 4)
+def point2bspline(face_ds, u1, u2, v1, v2):
     adaptor = BRepAdaptor_Surface(face_ds)
+    pts = TColgp_Array2OfPnt(1, 4, 1, 4)
+    raw_pts = []
+    
     for i, u in enumerate(np.linspace(u1, u2, 4), 1):
         for j, v in enumerate(np.linspace(v1, v2, 4), 1):
-            pts.SetValue(i, j, adaptor.Value(float(u), float(v)))
-    try:
-        tol = 1e-4
-        for i in range(8):
-            fitter = GeomAPI_PointsToBSplineSurface(pts, 3, 3, GeomAbs_C2, tol)
-            if (
-                fitter.IsDone()
-                and fitter.Surface().NbUPoles() == 4
-                and fitter.Surface().NbVPoles() == 4
-            ):
-                return fitter.Surface()
-            tol *= 2
-    except Exception as e:
-        raise RuntimeError(f"B-Spline surface fitting error: {e}")
+            p = adaptor.Value(float(u), float(v))
+            pts.SetValue(i, j, p)
+            raw_pts.append([p.X(), p.Y(), p.Z()])
+            
+    tol = _compute_tol(raw_pts, is_curve=False)
+    
+    for _ in range(9):
+        fitter = GeomAPI_PointsToBSplineSurface(pts, 3, 3, GeomAbs_C1, tol)
+        if fitter.IsDone() and fitter.Surface().NbUPoles() == 4 and fitter.Surface().NbVPoles() == 4:
+            return fitter.Surface()
+        tol *= 2
+        
     return None
 
 
@@ -878,8 +892,8 @@ def extract_bicubic_features_dir(shape: TopoDS_Shape):
     edge_map = TopTools_IndexedMapOfShape()
 
     # 核心数据：控制点 (Control Points / Poles)
-    face_controls = []  # Shape: [N_faces, 4, 4, 3]
-    edge_controls = []  # Shape: [N_edges, 4, 3]
+    face_controls = []  # Shape: [N_faces, 4, 4, 4]
+    edge_controls = []  # Shape: [N_edges, 4, 4]
 
     # 拓扑结构：索引与偏移
     outer_edge_indices = []
