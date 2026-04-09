@@ -24,7 +24,7 @@ def process_single_file(step_path, out_dir):
         verts, faces = shape2mesh(origin_shape)
         if len(faces) > 0:
             mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-            points, _ = trimesh.sample.sample_surface(mesh, 2000)
+            points, _ = trimesh.sample.sample_surface(mesh, 3072)
 
             point_cloud = trimesh.PointCloud(points)
 
@@ -85,13 +85,13 @@ def shape2mesh(shape):
 def main(args):
     in_dir, out_dir = Path(args.input), Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
-    step_files = load_dataset_fast(
-        "configs/filtered_brep_abc_data_split_6bit_paths.json",
-        "/cache/yanko/dataset/abc/",
-        ext=".step",
-    )["test"]
+    # step_files = load_dataset_fast(
+    #     "configs/filtered_brep_abc_data_split_6bit_paths.json",
+    #     "/cache/yanko/dataset/abc/",
+    #     ext=".step",
+    # )["test"]
 
-    # step_files = list(in_dir.glob("*.step"))
+    step_files = list(in_dir.glob("*.step"))
     print(f"Found {len(step_files)} STEP files in {in_dir}")
 
     success_count = 0

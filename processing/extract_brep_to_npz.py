@@ -32,7 +32,6 @@ def worker_task(file_path_str, output_dir_str):
     shard_dir = Path(output_dir_str) / base_name[:2]
     shard_dir.mkdir(parents=True, exist_ok=True)
 
-    # 最佳实践：使用 glob 匹配特征名，保留 Early Exit 性能优势，避免加载已处理的模型
     if next(shard_dir.glob(f"{base_name}_f*_e*.npz"), None):
         return "SKIPPED", None
 
@@ -132,8 +131,7 @@ def main():
     # #         dataset.update(value)
     # #     print(f"Total unique models in split: {len(dataset)}")
 
-    SEARCH_ROOT = "/cache/yanko/dataset/abc_solids_brep"
-    search_path = Path(SEARCH_ROOT)
+    search_path = Path(in_dir)
     files = list(search_path.rglob("*.brep"))
 
     total = len(files)
