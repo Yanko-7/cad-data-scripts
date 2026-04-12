@@ -17,8 +17,8 @@ from OCC.Extend.DataExchange import read_step_file
 from pebble import ProcessExpired, ProcessPool
 from tqdm import tqdm
 
-NUM_POINTS = 2048
-MAX_WORKERS = 40
+NUM_POINTS = 4096
+MAX_WORKERS = 80
 TIMEOUT = 120
 
 
@@ -84,18 +84,28 @@ def main():
         with open(args.split) as f:
             split_data = json.load(f)
         if args.split_key:
-            stems = split_data[args.split_key]
+            keys = [args.split_key]
         else:
-            stems = [s for v in split_data.values() for s in v]
-        step_files = sorted([f for s in stems for f in step_index.get(s, [])])
-        print(f"Split filter: {len(step_files)} files from {len(stems)} stems in {in_dir}")
+            keys = list(split_data.keys())
+        tasks = []
+        for key in keys:
+            sub_dir = out_dir if args.split_key else out_dir / key
+            sub_dir.mkdir(parents=True, exist_ok=True)
+            for s in split_data[key]:
+                for fp in step_index.get(s, []):
+                    tasks.append((fp, str(sub_dir)))
+        tasks.sort()
+        step_files = [t[0] for t in tasks]
+        out_dirs = [t[1] for t in tasks]
+        print(f"Split filter: {len(step_files)} files from {sum(len(split_data[k]) for k in keys)} stems in {in_dir}")
     else:
         step_files = sorted([f for fs in step_index.values() for f in fs])
+        out_dirs = [str(out_dir)] * len(step_files)
         print(f"Found {len(step_files)} STEP files in {in_dir}")
 
     ok = 0
     with ProcessPool(max_workers=args.workers, max_tasks=1) as pool:
-        future = pool.map(process_one, step_files, [str(out_dir)] * len(step_files), [n] * len(step_files), timeout=TIMEOUT)
+        future = pool.map(process_one, step_files, out_dirs, [n] * len(step_files), timeout=TIMEOUT)
         it = future.result()
         pbar = tqdm(total=len(step_files), desc="STEP → PLY")
         while True:

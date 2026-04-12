@@ -6,16 +6,10 @@ from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
 from OCC.Core.BRepCheck import BRepCheck_Analyzer, BRepCheck_ListIteratorOfListOfStatus
 from OCC.Core.BRepTools import BRepTools_WireExplorer, breptools
 from OCC.Core.Geom import (
-    Geom_BezierCurve,
-    Geom_BezierSurface,
     Geom_RectangularTrimmedSurface,
-    Geom_TrimmedCurve,
 )
-from OCC.Core.Geom import Geom_BSplineCurve, Geom_BSplineSurface
-from OCC.Core.GeomAbs import GeomAbs_C0, GeomAbs_C2,GeomAbs_C1
+from OCC.Core.GeomAbs import GeomAbs_C0
 from OCC.Core.GeomConvert import (
-    GeomConvert_BSplineCurveToBezierCurve,
-    GeomConvert_BSplineSurfaceToBezierSurface,
     geomconvert,
 )
 from OCC.Core.Precision import precision
@@ -44,13 +38,11 @@ from OCC.Core.TopTools import (
 )
 from OCC.Extend.DataExchange import read_step_file
 import os
+import math
 from OCC.Extend.DataExchange import write_step_file
 from OCC.Extend.TopologyUtils import TopologyExplorer
-from OCC.Core.GeomAPI import GeomAPI_PointsToBSplineSurface
-from OCC.Core.TColgp import TColgp_Array2OfPnt
-from OCC.Core.GeomAPI import GeomAPI_PointsToBSpline
-from OCC.Core.TColgp import TColgp_Array1OfPnt
-
+from OCC.Core.ShapeUpgrade import ShapeUpgrade_ShapeDivideAngle
+from geom_utils import extract_or_fit_cubic_curve, extract_or_fit_bicubic_patch
 
 def estimate_token_count(n_faces: int, n_edges: int) -> int:
     # Sequence =
@@ -421,6 +413,9 @@ def is_watertight(shape: TopoDS_Shape) -> bool:
     topexp.MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, edge_face_map)
 
     for i in range(1, edge_face_map.Size() + 1):
+        edge = topods.Edge(edge_face_map.FindKey(i))
+        if BRep_Tool.Degenerated(edge):
+            continue
         if edge_face_map.FindFromIndex(i).Size() < 2:
             return False
     return True
@@ -429,6 +424,10 @@ def is_watertight(shape: TopoDS_Shape) -> bool:
 def preprocess_shape(shape: TopoDS_Shape) -> TopoDS_Shape:
     shape = split_all_closed_faces(shape, num_splits=1)
     shape = split_all_closed_edges(shape, num_splits=1)
+    # Pre-processing: split arcs > 180°
+    divider = ShapeUpgrade_ShapeDivideAngle(math.pi, shape)
+    divider.Perform()
+    shape = divider.Result()
     return shape
 
 
@@ -496,180 +495,19 @@ def get_info_pipeline(file_path):
     check_euler_poincare(shape)
 
 
-# print(get_info_pipeline("test.step"))
-
-
-def extract_or_fit_bicubic_patch(face) -> np.ndarray:
-    face_ds = topods.Face(face)
-    u1, u2, v1, v2 = breptools.UVBounds(face_ds)
-    if any(map(precision.IsInfinite, (u1, u2, v1, v2))):
-        raise ValueError("Invalid UV bounds for face.")
-
-    surf = BRep_Tool.Surface(face_ds)
-    bspline = None
-
-    # 1. 尝试直接提取并转换为单一 Bicubic B-Spline 面片
-    try:
-        surf_type = surf.DynamicType().Name()
-        if surf_type == "Geom_BSplineSurface":
-            copied_surf = surf.Copy()
-            bspline = Geom_BSplineSurface.DownCast(copied_surf)
-        elif surf_type == "Geom_BezierSurface":
-            bspline = geomconvert.SurfaceToBSplineSurface(
-                Geom_BezierSurface.DownCast(surf)
-            )
-        else:
-            trimmed = Geom_RectangularTrimmedSurface(surf, u1, u2, v1, v2)
-            bspline = geomconvert.SurfaceToBSplineSurface(trimmed)
-            conv = GeomConvert_BSplineSurfaceToBezierSurface(bspline)
-            if conv.NbUPatches() == 1 and conv.NbVPatches() == 1:
-                bspline = geomconvert.SurfaceToBSplineSurface(conv.Patch(1, 1))
-
-        if bspline:
-            bspline.Segment(u1, u2, v1, v2)
-            bspline.IncreaseDegree(max(3, bspline.UDegree()), max(3, bspline.VDegree()))
-            if bspline.NbUPoles() != 4 or bspline.NbVPoles() != 4:
-                bspline = None
-    except Exception:
-        bspline = None
-
-    # 2. 回退方案：采样 4x4 个点进行双三次拟合 (4点插值必定生成 Degree 3 且无内部节点)
-    if not bspline:
-        bspline = point2bspline(face_ds, u1, u2, v1, v2)
-        if bspline is None:
-            raise RuntimeError("Fallback B-Spline surface fitting failed.")
-
-    # 3. 施加变换并提取权重与控制点
-    bspline.Transform(face_ds.Location().Transformation())
-    is_rational = bspline.IsURational() or bspline.IsVRational()
-    assert bspline.NbUPoles() == 4 and bspline.NbVPoles() == 4, (
-        "Final B-Spline surface must have exactly 4x4 poles."
-    )
-    poles = np.zeros((4, 4, 4), dtype=np.float32)
-    for i in range(1, 5):
-        for j in range(1, 5):
-            p = bspline.Pole(i, j)
-            w = bspline.Weight(i, j) if is_rational else 1.0
-            poles[i - 1, j - 1] = [p.X(), p.Y(), p.Z(), w]
-
-    return poles
-
-def _compute_tol(pts, is_curve):
-    pts = np.asarray(pts)
-    diag = np.linalg.norm(np.ptp(pts, axis=0))
-    if diag < 1e-10: 
-        return 1e-7
-    
-    cov = np.cov(pts.T)
-    extents = np.ptp(pts @ np.linalg.eigh(cov)[1], axis=0) if cov.ndim == 2 else np.ptp(pts, axis=0)
-    feat_size = np.sort(extents)[-1 if is_curve else -2]
-    
-    return np.clip(diag * 1e-3, 1e-7, feat_size * 0.2)
-    
-def point2bspline_curve(edge_ds, t1, t2):
-    adaptor = BRepAdaptor_Curve(edge_ds)
-    pts = TColgp_Array1OfPnt(1, 16)
-    raw_pts = []
-    
-    for i, t in enumerate(np.linspace(t1, t2, 16), 1):
-        p = adaptor.Value(float(t))
-        pts.SetValue(i, p)
-        raw_pts.append([p.X(), p.Y(), p.Z()])
-        
-    tol = _compute_tol(raw_pts, is_curve=True)
-    
-    for _ in range(9):
-        fitter = GeomAPI_PointsToBSpline(pts, 3, 3, GeomAbs_C1, tol)
-        if fitter.IsDone() and fitter.Curve().NbPoles() == 4:
-            return fitter.Curve()
-        tol *= 2
-        
-    return None
-
-def point2bspline(face_ds, u1, u2, v1, v2):
-    adaptor = BRepAdaptor_Surface(face_ds)
-    pts = TColgp_Array2OfPnt(1, 4, 1, 4)
-    raw_pts = []
-    
-    for i, u in enumerate(np.linspace(u1, u2, 4), 1):
-        for j, v in enumerate(np.linspace(v1, v2, 4), 1):
-            p = adaptor.Value(float(u), float(v))
-            pts.SetValue(i, j, p)
-            raw_pts.append([p.X(), p.Y(), p.Z()])
-            
-    tol = _compute_tol(raw_pts, is_curve=False)
-    
-    for _ in range(9):
-        fitter = GeomAPI_PointsToBSplineSurface(pts, 3, 3, GeomAbs_C1, tol)
-        if fitter.IsDone() and fitter.Surface().NbUPoles() == 4 and fitter.Surface().NbVPoles() == 4:
-            return fitter.Surface()
-        tol *= 2
-        
-    return None
-
-
-def extract_or_fit_cubic_curve(edge) -> np.ndarray:
-    edge_ds = topods.Edge(edge)
-    curve, t1, t2 = BRep_Tool.Curve(edge_ds)
-
-    if curve is None:
-        raise ValueError("Edge has no underlying 3D curve.")
-    if any(map(precision.IsInfinite, (t1, t2))):
-        raise ValueError("Invalid bounds for curve (Infinite).")
-
-    bspline = None
-
-    # 1. 尝试直接提取并转换为单一 Cubic B-Spline 曲线段
-    try:
-        curve_type = curve.DynamicType().Name()
-        if curve_type == "Geom_BSplineCurve":
-            copied_curve = curve.Copy()
-            bspline = Geom_BSplineCurve.DownCast(copied_curve)
-        elif curve_type == "Geom_BezierCurve":
-            bspline = geomconvert.CurveToBSplineCurve(Geom_BezierCurve.DownCast(curve))
-        else:
-            trimmed = Geom_TrimmedCurve(curve, t1, t2)
-            bspline = geomconvert.CurveToBSplineCurve(trimmed)
-            conv = GeomConvert_BSplineCurveToBezierCurve(bspline)
-            if conv.NbArcs() == 1:
-                bspline = geomconvert.CurveToBSplineCurve(conv.Arc(1))
-
-        if bspline:
-            bspline.Segment(t1, t2)
-            bspline.IncreaseDegree(max(3, bspline.Degree()))
-            # 严格校验：单一三次曲线控制点必为 4
-            if bspline.NbPoles() != 4:
-                bspline = None
-    except Exception:
-        bspline = None
-
-    # 2. 回退方案：采样 4 个点进行三次拟合 (4点插值必定生成 Degree 3 且无内部节点的线)
-    if not bspline:
-        bspline = point2bspline_curve(edge_ds, t1, t2)
-        if bspline is None:
-            raise RuntimeError("Fallback B-Spline fitting failed.")
-
-    # 3. 施加变换并提取权重与控制点
-    bspline.Transform(edge_ds.Location().Transformation())
-    is_rational = bspline.IsRational()
-    assert bspline.NbPoles() == 4, "Final B-Spline curve must have exactly 4 poles."
-    poles = np.zeros((4, 4), dtype=np.float32)
-    for i in range(1, 5):
-        p = bspline.Pole(i)
-        w = bspline.Weight(i) if is_rational else 1.0
-        poles[i - 1] = [p.X(), p.Y(), p.Z(), w]
-
-    return poles
 
 
 def extract_bicubic_features_dir(shape: TopoDS_Shape):
+    # Pre-processing: split arcs > 180°
+    # divider = ShapeUpgrade_ShapeDivideAngle(math.pi, shape)
+    # divider.Perform()
+    # shape = divider.Result()
+
     edge_map = TopTools_IndexedMapOfShape()
 
-    # 核心数据：控制点 (Control Points / Poles)
-    face_controls = []  # Shape: [N_faces, 4, 4, 4]
-    edge_controls = []  # Shape: [N_edges, 4, 4]
+    face_controls = []
+    edge_controls = []
 
-    # 拓扑结构：索引与偏移
     outer_edge_indices = []
     face_outer_offsets = [0]
 
@@ -677,7 +515,6 @@ def extract_bicubic_features_dir(shape: TopoDS_Shape):
     inner_loop_offsets = [0]
     face_inner_offsets = [0]
 
-    # 临时映射：Edge ID -> [Face ID, ...]
     edge_to_face_map = {}
 
     face_exp = TopExp_Explorer(shape, TopAbs_FACE)
@@ -700,6 +537,9 @@ def extract_bicubic_features_dir(shape: TopoDS_Shape):
             edge_exp = BRepTools_WireExplorer(wire)
             while edge_exp.More():
                 edge = topods.Edge(edge_exp.Current())
+                if BRep_Tool.Degenerated(edge):
+                    edge_exp.Next()
+                    continue
 
                 e_idx = edge_map.FindIndex(edge)
                 if e_idx == 0:
@@ -710,14 +550,12 @@ def extract_bicubic_features_dir(shape: TopoDS_Shape):
                 global_id = e_idx - 1
                 loop_edge_ids.append(global_id)
 
-                # 记录邻接
                 adj_faces = edge_to_face_map[global_id]
                 if not adj_faces or adj_faces[-1] != face_idx:
                     adj_faces.append(face_idx)
 
                 edge_exp.Next()
 
-            # 3. 更新 Wire 拓扑
             if is_outer:
                 outer_edge_indices.extend(loop_edge_ids)
                 face_outer_offsets.append(len(outer_edge_indices))

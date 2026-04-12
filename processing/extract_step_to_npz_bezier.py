@@ -8,10 +8,7 @@ from pathlib import Path
 from tqdm import tqdm
 from concurrent.futures import TimeoutError, as_completed
 from pebble import ProcessPool, ProcessExpired
-from OCC.Core.BRep import BRep_Builder
-from OCC.Core.BRepTools import breptools
 from OCC.Core.ShapeFix import ShapeFix_Shape
-from OCC.Core.TopoDS import TopoDS_Shape
 import sys
 from OCC.Extend.DataExchange import read_step_file
 
@@ -22,12 +19,7 @@ from utils import (
     preprocess_shape,
 )
 
-MAX_FACES = 100
-MAX_EDGES = 1000
-# PERFACE_EDGE = 40
-
-
-def worker_task(file_path_str, output_dir_str):
+def worker_task(file_path_str, output_dir_str, max_faces, max_edges, perface_edge):
     gc.disable()
     file_path = Path(file_path_str)
     base_name = file_path.stem
@@ -45,13 +37,18 @@ def worker_task(file_path_str, output_dir_str):
         shape = fixer.Shape()
         shape = preprocess_shape(shape)
 
-        data = extract_bicubic_features_dir(shape)
+        f_count, e_count, face_edge_counts = get_fast_stats(shape)
+        if f_count > max_faces or e_count > max_edges:
+            return "SKIPPED", None
+        if perface_edge and any(c > perface_edge for c in face_edge_counts):
+            return "SKIPPED", None
 
-        f_count, e_count, _ = get_fast_stats(shape)
+        data = extract_bicubic_features_dir(shape)
+        actual_e_count = len(data["edge_controls"])
         data["f_count"] = np.array([f_count], dtype=np.int32)
-        data["e_count"] = np.array([e_count], dtype=np.int32)
-        # 动态生成包含面和边数量的最终文件名
-        final_filename = f"{base_name.split('_')[0]}_{base_name.split('_')[1]}_f{f_count}_e{e_count}.npz"
+        data["e_count"] = np.array([actual_e_count], dtype=np.int32)
+
+        final_filename = f"{base_name.split('_')[0]}_{base_name.split('_')[1]}_f{f_count}_e{actual_e_count}.npz"
         final_path = shard_dir / final_filename
         temp_path = shard_dir / f"{base_name}.tmp.npz"
 
@@ -63,7 +60,7 @@ def worker_task(file_path_str, output_dir_str):
         return "ERROR", str(e)
 
 
-def filter_and_dedup(file_paths):
+def filter_and_dedup(file_paths, max_faces, max_edges):
     filtered = {}
     for f in file_paths:
         parts = f.stem.split("_")
@@ -71,7 +68,7 @@ def filter_and_dedup(file_paths):
             continue
         try:
             model_id, faces, edges = parts[0], int(parts[2]), int(parts[3])
-            if faces <= MAX_FACES and edges <= MAX_EDGES:
+            if faces <= max_faces and edges <= max_edges:
                 key = (model_id, faces, edges)
                 if key not in filtered:
                     filtered[key] = f
@@ -85,20 +82,20 @@ def chunker(seq, size):
         yield seq[pos : pos + size]
 
 
-def load_split_paths(json_path: str, root_dir: str, ext: str = ".npz") -> dict[str, list[str]]:
+def load_split_paths(json_path: str, root_dir: str, splits: list[str] | None = None, ext: str = ".step") -> list[str]:
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    p2s = {p: split for split, prefixes in data.items() for p in prefixes}
+    target = set(splits) if splits else set(data.keys())
+    p2s = {p: split for split, prefixes in data.items() if split in target for p in prefixes}
     lengths = sorted({len(p) for p in p2s}, reverse=True)
-    
-    result = {split: [] for split in data}
 
+    result = []
     for r, _, files in os.walk(root_dir):
         for f in filter(lambda x: x.endswith(ext), files):
             for length in lengths:
-                if len(f) >= length and (prefix := f[:length]) in p2s:
-                    result[p2s[prefix]].append(os.path.join(r, f))
+                if len(f) >= length and f[:length] in p2s:
+                    result.append(os.path.join(r, f))
                     break
 
     return result
@@ -109,6 +106,11 @@ def main():
     parser.add_argument("-o", "--output", required=True)
     parser.add_argument("-w", "--workers", type=int, default=os.cpu_count() - 4)
     parser.add_argument("-t", "--timeout", type=int, default=600)
+    parser.add_argument("--max-faces", type=int, default=100)
+    parser.add_argument("--max-edges", type=int, default=1000)
+    parser.add_argument("--perface-edge", type=int, default=None)
+    parser.add_argument("--split", type=str, default=None, help="Path to split JSON file")
+    parser.add_argument("--splits", nargs="+", default=None, help="Splits to use, e.g. train val test")
     args = parser.parse_args()
 
     in_dir, out_dir = Path(args.input), Path(args.output)
@@ -118,23 +120,10 @@ def main():
         level=logging.ERROR,
         format="%(asctime)s|%(message)s",
     )
-    # paths_dict = load_split_paths(
-    #     json_path="brepgen_deepcad_data_split_6bit.json",
-    #     root_dir="/cache/yanko/dataset/abc",
-    #     ext=".step"
-    # )
-    # files = paths_dict["train"] + paths_dict["val"] + paths_dict["test"]
-
-    # # print("[INFO] Scanning and pre-filtering files...")
-    # # with open("ABC-dataset/abc_data_split_6bit.json", "r") as f:
-    # #     split = json.load(f)
-    # #     dataset = set()
-    # #     for key, value in split.items():
-    # #         dataset.update(value)
-    # #     print(f"Total unique models in split: {len(dataset)}")
-
-    search_path = Path(in_dir)
-    files = list(search_path.rglob("*.step"))
+    if args.split:
+        files = [Path(f) for f in load_split_paths(args.split, str(in_dir), splits=args.splits)]
+    else:
+        files = list(Path(in_dir).rglob("*.step"))
 
     total = len(files)
     batch_size = args.workers * 500000
@@ -147,7 +136,9 @@ def main():
             with ProcessPool(max_workers=args.workers, max_tasks=5000) as pool:
                 futures = {
                     pool.schedule(
-                        worker_task, args=(str(f), str(out_dir)), timeout=args.timeout
+                        worker_task,
+                        args=(str(f), str(out_dir), args.max_faces, args.max_edges, args.perface_edge),
+                        timeout=args.timeout,
                     ): f
                     for f in chunk
                 }
@@ -180,6 +171,9 @@ def main():
     for k, v in stats.items():
         print(f"{k}: {v}")
 
-
+# python extract_step_to_npz_bezier.py -i /data/step -o /data/out \
+#     --split DEEPCAD-dataset/brepgen_deepcad_data_split_6bit.json \
+#     --splits train val \
+#     --max-faces 50 --max-edges 500
 if __name__ == "__main__":
     main()
