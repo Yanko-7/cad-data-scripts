@@ -20,10 +20,10 @@ from utils import (
 )
 
 def worker_task(file_path_str, output_dir_str, max_faces, max_edges, perface_edge):
-    gc.disable()
+    gc.disable()  # avoid GC pauses mid-task; gc.collect() called on exit
     file_path = Path(file_path_str)
     base_name = file_path.stem
-    shard_dir = Path(output_dir_str) / base_name[:2]
+    shard_dir = Path(output_dir_str) / base_name[:6]
     shard_dir.mkdir(parents=True, exist_ok=True)
 
     # 最佳实践：使用 glob 匹配特征名，保留 Early Exit 性能优势，避免加载已处理的模型
@@ -58,6 +58,9 @@ def worker_task(file_path_str, output_dir_str, max_faces, max_edges, perface_edg
         return "SUCCESS", None
     except Exception as e:
         return "ERROR", str(e)
+    finally:
+        gc.enable()
+        gc.collect()
 
 
 def filter_and_dedup(file_paths, max_faces, max_edges):
@@ -75,11 +78,6 @@ def filter_and_dedup(file_paths, max_faces, max_edges):
         except ValueError:
             continue
     return list(filtered.values())
-
-
-def chunker(seq, size):
-    for pos in range(0, len(seq), size):
-        yield seq[pos : pos + size]
 
 
 def load_split_paths(json_path: str, root_dir: str, splits: list[str] | None = None, ext: str = ".step") -> list[str]:
@@ -126,46 +124,44 @@ def main():
         files = list(Path(in_dir).rglob("*.step"))
 
     total = len(files)
-    batch_size = args.workers * 500000
     stats = {"SUCCESS": 0, "SKIPPED": 0, "ERROR": 0, "CRASH": 0, "TIMEOUT": 0}
 
-    print(f"Target Files: {total} | Workers: {args.workers} | Batch: {batch_size}")
+    print(f"Target Files: {total} | Workers: {args.workers}")
 
     with tqdm(total=total, smoothing=0.1) as pbar:
-        for chunk in chunker(files, batch_size):
-            with ProcessPool(max_workers=args.workers, max_tasks=5000) as pool:
-                futures = {
-                    pool.schedule(
-                        worker_task,
-                        args=(str(f), str(out_dir), args.max_faces, args.max_edges, args.perface_edge),
-                        timeout=args.timeout,
-                    ): f
-                    for f in chunk
-                }
+        with ProcessPool(max_workers=args.workers) as pool:
+            futures = {
+                pool.schedule(
+                    worker_task,
+                    args=(str(f), str(out_dir), args.max_faces, args.max_edges, args.perface_edge),
+                    timeout=args.timeout,
+                ): f
+                for f in files
+            }
 
-                for future in as_completed(futures):
-                    f_name = futures[future]
-                    try:
-                        status, msg = future.result()
-                        stats[status] += 1
-                        if status == "ERROR":
-                            logging.error(f"ERROR|{f_name}|{msg}")
-                    except TimeoutError:
-                        stats["TIMEOUT"] += 1
-                        logging.error(f"TIMEOUT|{f_name}")
-                    except ProcessExpired:
-                        stats["CRASH"] += 1
-                        logging.error(f"CRASH|{f_name}")
-                    except Exception as e:
-                        stats["ERROR"] += 1
-                        logging.error(f"UNKNOWN|{f_name}|{e}")
+            for future in as_completed(futures):
+                f_name = futures[future]
+                try:
+                    status, msg = future.result()
+                    stats[status] += 1
+                    if status == "ERROR":
+                        logging.error(f"ERROR|{f_name}|{msg}")
+                except TimeoutError:
+                    stats["TIMEOUT"] += 1
+                    logging.error(f"TIMEOUT|{f_name}")
+                except ProcessExpired:
+                    stats["CRASH"] += 1
+                    logging.error(f"CRASH|{f_name}")
+                except Exception as e:
+                    stats["ERROR"] += 1
+                    logging.error(f"UNKNOWN|{f_name}|{e}")
 
-                    pbar.set_postfix(
-                        ok=stats["SUCCESS"],
-                        skip=stats["SKIPPED"],
-                        fail=stats["ERROR"] + stats["CRASH"] + stats["TIMEOUT"],
-                    )
-                    pbar.update(1)
+                pbar.set_postfix(
+                    ok=stats["SUCCESS"],
+                    skip=stats["SKIPPED"],
+                    fail=stats["ERROR"] + stats["CRASH"] + stats["TIMEOUT"],
+                )
+                pbar.update(1)
 
     print("\n--- Done ---")
     for k, v in stats.items():
