@@ -24,7 +24,7 @@ def process_single_file(step_path, out_dir):
         verts, faces = shape2mesh(origin_shape)
         if len(faces) > 0:
             mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-            points, _ = trimesh.sample.sample_surface(mesh, 3072)
+            points, _ = trimesh.sample.sample_surface(mesh, 4096)
 
             point_cloud = trimesh.PointCloud(points)
 
@@ -95,7 +95,7 @@ def main(args):
     print(f"Found {len(step_files)} STEP files in {in_dir}")
 
     success_count = 0
-    with ProcessPool(max_workers=40, max_tasks=1) as pool:
+    with ProcessPool(max_workers=120, max_tasks=1) as pool:
         future = pool.map(
             process_single_file, step_files, [out_dir] * len(step_files), timeout=120
         )

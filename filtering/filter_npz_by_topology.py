@@ -7,11 +7,11 @@ from typing import Dict, List, Tuple
 import numpy as np
 from tqdm import tqdm
 
-MAX_FACE = 100
+MAX_FACE = 30
 PER_FACE_EDGE_LIMIT = 20
 TOTAL_EDGE_LIMIT = 1000
 BBOX_THRES = 1 / (2 ** (10 - 1))
-
+BREPGEN_THRES = 0.05 / 3
 
 def load_split_paths(
     json_path: str, root_dir: str, ext: str = ".npz"
@@ -99,7 +99,7 @@ def has_duplicate_bboxes(bboxes: np.ndarray) -> bool:
         return False
     diffs = np.max(np.abs(bboxes[:, None, :] - bboxes[None, :, :]), axis=-1)
     np.fill_diagonal(diffs, np.inf)
-    return bool((diffs < BBOX_THRES).any())
+    return bool((diffs < BREPGEN_THRES).any())
 
 
 def is_ok_file(file_path: str) -> Tuple[str, bool, str]:
@@ -148,13 +148,13 @@ def filter_dataset(
     filtered_paths = {}
     stats = Counter()
 
-    for split, paths in dataset_paths.items():
-        if not paths:
-            filtered_paths[split] = []
-            continue
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        for split, paths in dataset_paths.items():
+            if not paths:
+                filtered_paths[split] = []
+                continue
 
-        valid_ids = set()
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            valid_ids = set()
             futures = [executor.submit(is_ok_file, path) for path in paths]
             for future in tqdm(
                 as_completed(futures), total=len(futures), desc=f"Filtering {split}"
@@ -162,12 +162,12 @@ def filter_dataset(
                 path, is_ok, reason = future.result()
                 stats[reason] += 1
                 if is_ok:
-                    splits = os.path.basename(path).split("_")
-                    if len(splits) >= 2:
-                        valid_ids.add(f"{splits[0]}_{splits[1]}")
+                    parts = os.path.basename(path).split("_")
+                    if len(parts) >= 2:
+                        valid_ids.add(f"{parts[0]}_{parts[1]}")
 
-        filtered_paths[split] = list(valid_ids)
-        print(f"[{split}] Kept: {len(valid_ids)} / Total: {len(paths)}\n")
+            filtered_paths[split] = list(valid_ids)
+            print(f"[{split}] Kept: {len(valid_ids)} / Total: {len(paths)}\n")
 
     if "validation" in filtered_paths:
         filtered_paths["val"] = filtered_paths.pop("validation")
@@ -186,19 +186,20 @@ def filter_dataset(
 
 
 if __name__ == "__main__":
-    paths_dict = load_split_paths(
-        json_path="configs/abc1m_split.json",
-        root_dir="/cache/yanko/dataset/abc_solids_conveted_bezier_dynamic_tol/",
-    )
     # paths_dict = load_split_paths(
-    #     json_path="brepgen_deepcad_data_split_6bit.json",
-    #     root_dir="/cache/yanko/dataset/deepcad",
+    #     json_path="configs/abc1m_split.json",
+    #     root_dir="/cache/yanko/dataset/abc_solids_conveted_bezier_dynamic_tol/",
     # )
+    print("Scanning dataset directory...")
+    paths_dict = load_split_paths(
+        json_path="DEEPCAD-dataset/brepgen_deepcad_data_split_6bit.json",
+        root_dir="/cache/yanko/dataset/deepcad_new",
+    )
     for k, v in paths_dict.items():
         print(f"{k}: {len(v)} files")
 
     filter_dataset(
         dataset_paths=paths_dict,
-        output_json="configs/filtered_brep_abc1m_paths.json",
+        output_json="configs/filtered_brep_deepcad_paths.json",
         max_workers=100,
     )
