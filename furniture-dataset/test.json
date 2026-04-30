@@ -1,0 +1,794 @@
+[
+    {
+        "data_id": "5562",
+        "category": "table",
+        "type": "partstudio",
+        "did": "82e7a719a760b09c452766de",
+        "wid": "3121843271926ebcd3137184",
+        "eid": "18fe73aa2e9b8748a37f07df"
+    },
+    {
+        "data_id": "2082",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "b301d9fe75a1ceb55d08c64b",
+        "wid": "77de7c0636680f2e53a8d483",
+        "eid": "01c2a887b0e15292335ca8bf"
+    },
+    {
+        "data_id": "0451",
+        "category": "sofa",
+        "type": "partstudio",
+        "did": "8241d0f79e601c060393b6d8",
+        "wid": "3f2dc625892bc8ff1836c508",
+        "eid": "2a703251a140a9470b9b2de2"
+    },
+    {
+        "data_id": "0219",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "d7b6ec616715adc45e7104bc",
+        "wid": "8170f71df0723615fcfecd43",
+        "eid": "cced12b91a632296fba9e67a"
+    },
+    {
+        "data_id": "0108",
+        "category": "couch",
+        "type": "partstudio",
+        "did": "0ad897177b84abff58679700",
+        "wid": "3b90b8577aef29e13a8baad1",
+        "eid": "92f06cd8c0027cb87dafe98a"
+    },
+    {
+        "data_id": "0303",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "16a7db3fc4c563a1b682534d",
+        "wid": "935ce0c17da82c4f95fcafcf",
+        "eid": "2d18c03cfaa3c790fc7e80bd"
+    },
+    {
+        "data_id": "1190",
+        "category": "cabinet",
+        "type": "partstudio",
+        "did": "05cb8cd1e823e1ea8585424a",
+        "wid": "32d8c49c3a723986e5d0b165",
+        "eid": "5204d2a8f55e95f6f9b3fd27"
+    },
+    {
+        "data_id": "0287",
+        "category": "couch",
+        "type": "partstudio",
+        "did": "8c654df9025a1d7c15e0aaf1",
+        "wid": "ed7657ba2853112738329769",
+        "eid": "ff4fd434d7c251e038328b62"
+    },
+    {
+        "data_id": "0793",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "df7155edf4a323f96223ea15",
+        "wid": "c2a6e6d34d42b536843cbe28",
+        "eid": "9f2534f988643e85c88eb34c"
+    },
+    {
+        "data_id": "0904",
+        "category": "table",
+        "type": "partstudio",
+        "did": "17d99351ee0427576b8078c0",
+        "wid": "b82321a2452f2b0025e90c87",
+        "eid": "49dcdde290588a744ffbb020"
+    },
+    {
+        "data_id": "4880",
+        "category": "lamp",
+        "type": "partstudio",
+        "did": "c69e4b96191c04c871e24ac8",
+        "wid": "c68e790a0314563d38e7cc5c",
+        "eid": "ddaf0cff052a1757feb3f0d8"
+    },
+    {
+        "data_id": "4607",
+        "category": "table",
+        "type": "partstudio",
+        "did": "252f053a7c72aacfacd067cf",
+        "wid": "3d4fd2ad80e65cbb8ff2056e",
+        "eid": "da1cb1f1b0a53f20619cc238"
+    },
+    {
+        "data_id": "0417",
+        "category": "sofa",
+        "type": "partstudio",
+        "did": "4a4c9861133b17c1e2e6aba9",
+        "wid": "4299cd7808116572ad316789",
+        "eid": "bcf596c884782322daff0637"
+    },
+    {
+        "data_id": "0185",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "5e6e5c76495a8ca653916c0f",
+        "wid": "8d12b6152e79619d5327c769",
+        "eid": "6d2e8443c8188bce82c8e5c2"
+    },
+    {
+        "data_id": "2838",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "23dfd3acde2a53c1bd520fac",
+        "wid": "4d95f2a12d0ac93a69dda4f9",
+        "eid": "b4a02d165337e63fe4328055"
+    },
+    {
+        "data_id": "6567",
+        "category": "table",
+        "type": "partstudio",
+        "did": "ea046c23122717a52c1a753a",
+        "wid": "d63dd352c25dbecbe98677c4",
+        "eid": "79bd339b3d19f9259d4cdc63"
+    },
+    {
+        "data_id": "0225",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "b26cd38eb26759d89680ad1a",
+        "wid": "197a21240edea7a50bf66c56",
+        "eid": "85372cb5ed9798d6cd9d76d2"
+    },
+    {
+        "data_id": "0223",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "b07395b445502c9141b65b11",
+        "wid": "3c4a91b0a887fdb45d2b7625",
+        "eid": "d2f57c0ff2e920fcaceff50f"
+    },
+    {
+        "data_id": "0414",
+        "category": "lamp",
+        "type": "partstudio",
+        "did": "ae1279b4ca78cb64763fac65",
+        "wid": "afd0b00c8ac02304f7602802",
+        "eid": "9cb70509957c1e739613e3cb"
+    },
+    {
+        "data_id": "0500",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "fef7abd15ff79c4752ae65ea",
+        "wid": "2a721deb327208d13cbaf7f3",
+        "eid": "f77de427b692db2fd4b8cb19"
+    },
+    {
+        "data_id": "2689",
+        "category": "table",
+        "type": "partstudio",
+        "did": "c0359335b643bc1b432a94a2",
+        "wid": "19a204cda305f9bc600b7b5f",
+        "eid": "ab007e66ac2095287ae0c43c"
+    },
+    {
+        "data_id": "2916",
+        "category": "table",
+        "type": "partstudio",
+        "did": "18af829d30d1780e5da1c86e",
+        "wid": "c1b01fb6a97e4a2b88e44555",
+        "eid": "0fb82727ff11f649a67d0bd9"
+    },
+    {
+        "data_id": "0309",
+        "category": "table",
+        "type": "partstudio",
+        "did": "d1e63688155f6c016dc798de",
+        "wid": "7969ef38a0e674cacb54367c",
+        "eid": "c7e9e68a2cf0db29fd59e6f0"
+    },
+    {
+        "data_id": "0762",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "a5723c573baeb49de47e870a",
+        "wid": "d2fb7debd8a29494727560cc",
+        "eid": "338226fd6a0baacbdbd51190"
+    },
+    {
+        "data_id": "0554",
+        "category": "cabinet",
+        "type": "partstudio",
+        "did": "3aa1f560262404fd841bb074",
+        "wid": "7ead3dcb04fa29ebcb75d6a4",
+        "eid": "1b4902e9d8802eb65de17a5c"
+    },
+    {
+        "data_id": "0425",
+        "category": "couch",
+        "type": "partstudio",
+        "did": "0942e49ff1f1295d8b329f95",
+        "wid": "c3ecc732f74ed8f5b11a8cb4",
+        "eid": "a5e1e1b826960ed939d9cfdc"
+    },
+    {
+        "data_id": "2693",
+        "category": "table",
+        "type": "partstudio",
+        "did": "afb921cee2cdd6966915ac16",
+        "wid": "09584299658e855f97589cce",
+        "eid": "3735b76a9be98e532f77fbb6"
+    },
+    {
+        "data_id": "2032",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "afbf75430c22ea3da21200bc",
+        "wid": "c7b070bd1985f445ddc2b795",
+        "eid": "fbbc248b1d7ba94b9d797331"
+    },
+    {
+        "data_id": "0335",
+        "category": "bookshelf",
+        "type": "partstudio",
+        "did": "e6e8abec3b7b743b083f4e20",
+        "wid": "f222e679c4a84293d5b402b1",
+        "eid": "931cd65b3cb6415bb7ac77c6"
+    },
+    {
+        "data_id": "0840",
+        "category": "sofa",
+        "type": "partstudio",
+        "did": "d53c656a174db1240979d7cf",
+        "wid": "8271b3e43dd7ead34880e0b6",
+        "eid": "bff907b5edaf4653dc5cd6b8"
+    },
+    {
+        "data_id": "2283",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "87b6639e45b8d68f30c2dfe1",
+        "wid": "ddc31ad7b5e6c86b7801f3a7",
+        "eid": "839359d7f1dba1b126f660fd"
+    },
+    {
+        "data_id": "0207",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "ebc8bd3631c7234c60212b35",
+        "wid": "823e0c2663e19be7caf8e07a",
+        "eid": "a1d1326f641e03180a8818e8"
+    },
+    {
+        "data_id": "1956",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "891f000ac1f861a1c6d683f1",
+        "wid": "3c6e4f64c4d481772ac2eac7",
+        "eid": "180aaa3175844c1d51ec1a31"
+    },
+    {
+        "data_id": "0180",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "1c0538b9ddb87c8e3c5ea748",
+        "wid": "75a836047379bc42df0489e4",
+        "eid": "09988f1fab862572619f15f2"
+    },
+    {
+        "data_id": "0728",
+        "category": "couch",
+        "type": "partstudio",
+        "did": "f375193f765c0d4414878d39",
+        "wid": "40427712ed8071657cc239ca",
+        "eid": "149fe286f85a7a6a7311ec78"
+    },
+    {
+        "data_id": "6776",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "68a21044fb089e17f457c901",
+        "wid": "115dfd6b195e914ef92e8573",
+        "eid": "0d351e02250d49edfbc65d7d"
+    },
+    {
+        "data_id": "1526",
+        "category": "table",
+        "type": "partstudio",
+        "did": "fdcf0674a1c46c9451c5e854",
+        "wid": "609ab59cfc4caa911a86abf2",
+        "eid": "ce6e630d74b9bafa120d0e7b"
+    },
+    {
+        "data_id": "2377",
+        "category": "table",
+        "type": "partstudio",
+        "did": "550fda7475fde66cd7b3d07a",
+        "wid": "8b1128f406ba32a21afbf810",
+        "eid": "41404da5769a3b85e4d1221f"
+    },
+    {
+        "data_id": "4246",
+        "category": "table",
+        "type": "partstudio",
+        "did": "2272a69ac9e178f4de68dbaf",
+        "wid": "5c48cc8c25a5cff7c14284f0",
+        "eid": "4804c98963fce26dbb42b26b"
+    },
+    {
+        "data_id": "2547",
+        "category": "table",
+        "type": "partstudio",
+        "did": "8518d2bd414cbc1c0425a6d6",
+        "wid": "5bd6d4e4b85947b0b46ec13d",
+        "eid": "53f0675861da3d6e2167545a"
+    },
+    {
+        "data_id": "0011",
+        "category": "couch",
+        "type": "partstudio",
+        "did": "a6aa966aed8d5701a1e4db69",
+        "wid": "49c64940c45ece47197b3704",
+        "eid": "407aedc6cc38be170c7b847f"
+    },
+    {
+        "data_id": "0531",
+        "category": "bathtub",
+        "type": "partstudio",
+        "did": "ca37e7fda9a1464dddd6bcbc",
+        "wid": "7cc54d729f5f0613f600a229",
+        "eid": "e6b22a0035f43fb2e9103fd8"
+    },
+    {
+        "data_id": "2792",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "4596080403b486988ddb5def",
+        "wid": "ebbff2134dab84d16eacc9fc",
+        "eid": "8d15b38c516e698a38c07d08"
+    },
+    {
+        "data_id": "1306",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "537326272d8b79ad97d42c9f",
+        "wid": "1062c53b4746fe3d4902ccac",
+        "eid": "4a170ea4bf72b2a9155accd4"
+    },
+    {
+        "data_id": "0134",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "708b9c19f3c7a947e189fcdc",
+        "wid": "23d7f0812430bd2f24c4b0a4",
+        "eid": "2b743981b841dda10f097a99"
+    },
+    {
+        "data_id": "0353",
+        "category": "table",
+        "type": "partstudio",
+        "did": "351049abc1daa22a124bf8c4",
+        "wid": "6d0fef9e46db6ff556a1a1ed",
+        "eid": "6d86876dc71d4ebc458bd4d7"
+    },
+    {
+        "data_id": "0823",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "315e4be7410f2eab792d45bc",
+        "wid": "0caa0d5de70c1ed2e0384b5c",
+        "eid": "8fd1e8405ff8c0a7b841b82d"
+    },
+    {
+        "data_id": "0012",
+        "category": "bookshelf",
+        "type": "partstudio",
+        "did": "761cbe00a8bca2f6f9862bae",
+        "wid": "73edc0d7298709d802b8c1da",
+        "eid": "75b08f51a634c58d83b35470"
+    },
+    {
+        "data_id": "4379",
+        "category": "cabinet",
+        "type": "partstudio",
+        "did": "aed7ea083d151f614e7f3109",
+        "wid": "dd2b77de93b73373085f02c6",
+        "eid": "7931972d163f31656767538f"
+    },
+    {
+        "data_id": "0144",
+        "category": "lamp",
+        "type": "partstudio",
+        "did": "118d5f807737192b61909f42",
+        "wid": "46aae6f65a6ce0c9e45b1d93",
+        "eid": "02070215ddc15efc69ec8134"
+    },
+    {
+        "data_id": "1123",
+        "category": "sofa",
+        "type": "partstudio",
+        "did": "e5d5821fd48c5e366177392f",
+        "wid": "ac605acabeec08184e9777f7",
+        "eid": "3f411521e01fcbdf334d33d7"
+    },
+    {
+        "data_id": "2457",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "511973fd9c4ec686a952f9cd",
+        "wid": "b794ce731a98b82a0fea1b49",
+        "eid": "202b7a33440bae04e6851d3b"
+    },
+    {
+        "data_id": "0380",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "49668901f343e6aa501cd9ab",
+        "wid": "eb98b366b09c18538e8c9777",
+        "eid": "462ec31c072d76ac9bd60d38"
+    },
+    {
+        "data_id": "0541",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "315e4be7410f2eab792d45bc",
+        "wid": "0caa0d5de70c1ed2e0384b5c",
+        "eid": "a6463d16b6e03a5f4742fa30"
+    },
+    {
+        "data_id": "0504",
+        "category": "bathtub",
+        "type": "partstudio",
+        "did": "5deea402e4409163cb77107d",
+        "wid": "dcb3c5ce522b013b9fcac3a6",
+        "eid": "d1ee1b2e7f29eef4c5aa8da3"
+    },
+    {
+        "data_id": "3868",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "991e3d753cbcb17f3973632d",
+        "wid": "b5f18542ea15db374392788a",
+        "eid": "65cf3839ce835a5a8c7d9605"
+    },
+    {
+        "data_id": "0111",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "0d931b0836137971ebffda4b",
+        "wid": "cdb40ccae814f8e0d2306087",
+        "eid": "a7fdcee6df03b6547ff2c674"
+    },
+    {
+        "data_id": "0306",
+        "category": "bathtub",
+        "type": "partstudio",
+        "did": "5d9f17c4db6762ac23f34009",
+        "wid": "c78e3771eae9c5c0748d8542",
+        "eid": "394241ecb35d082fabb6f6e1"
+    },
+    {
+        "data_id": "0014",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "9c2ca4857906ab8039d4d035",
+        "wid": "77d78d9b107680aa88ecc4cc",
+        "eid": "a786fa515bef3a732475e9b0"
+    },
+    {
+        "data_id": "0661",
+        "category": "table",
+        "type": "partstudio",
+        "did": "20fc4a234a4a68790a37e24b",
+        "wid": "f3f044fbe6d63603d1d06c4f",
+        "eid": "6db94e96fd8c2e77138eb77a"
+    },
+    {
+        "data_id": "0091",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "97d46176c4c8a03888e5f982",
+        "wid": "527ca8a32281c7e568397b9f",
+        "eid": "e0442a92268b4d1f81a9cd2f"
+    },
+    {
+        "data_id": "0474",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "2884c56b564b35d528b986d0",
+        "wid": "cce16614de00527af4e415cc",
+        "eid": "68d9213e9f6bc5d9a3f9badb"
+    },
+    {
+        "data_id": "0708",
+        "category": "couch",
+        "type": "partstudio",
+        "did": "8d124cbc2b49d35ef849670b",
+        "wid": "c12ac5c810c46a5a44b29ab3",
+        "eid": "a51f6fe7bbb89ab70da5a512"
+    },
+    {
+        "data_id": "1742",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "98bfee1334df9b10d6344256",
+        "wid": "08ad25e0da87b81e7f8e44de",
+        "eid": "16bc6c9574539e04734ead6f"
+    },
+    {
+        "data_id": "1143",
+        "category": "cabinet",
+        "type": "partstudio",
+        "did": "0ce50b56fabf854716692da3",
+        "wid": "af06aa22f6375f28780e6a77",
+        "eid": "46ce280f4a867bbe7cb84407"
+    },
+    {
+        "data_id": "3795",
+        "category": "table",
+        "type": "partstudio",
+        "did": "a45080f16fa4d10a3a126836",
+        "wid": "784a3e306ac2d3bef281bca1",
+        "eid": "cc536cbc6f73628847e0ab64"
+    },
+    {
+        "data_id": "2479",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "68c78bcd03ead98ddbee3d0b",
+        "wid": "d946d4e94063472ae5e35905",
+        "eid": "3057457024d02a10bd417376"
+    },
+    {
+        "data_id": "0943",
+        "category": "cabinet",
+        "type": "partstudio",
+        "did": "dc4e9285763a8bb620893724",
+        "wid": "4cf242d57f8e084ea280470c",
+        "eid": "ce208407a38a0318f2794d33"
+    },
+    {
+        "data_id": "0111",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "37c4b70a857443bc8e4ad359",
+        "wid": "09af74e93bde431ab5dd2845",
+        "eid": "8e7e0b7c484647e19bc3acc3"
+    },
+    {
+        "data_id": "5289",
+        "category": "table",
+        "type": "partstudio",
+        "did": "708b9c19f3c7a947e189fcdc",
+        "wid": "23d7f0812430bd2f24c4b0a4",
+        "eid": "f0e5d1e9aaf09f9695708a15"
+    },
+    {
+        "data_id": "0004",
+        "category": "table",
+        "type": "partstudio",
+        "did": "255c881527c8bebb15aa788f",
+        "wid": "5bcab9633b6a6c1e3b4ac5dc",
+        "eid": "3e2275d77f810fe490aed15f"
+    },
+    {
+        "data_id": "1630",
+        "category": "lamp",
+        "type": "partstudio",
+        "did": "144611db3859333bc99134d5",
+        "wid": "6da1d41b5c36898c67eb1d9f",
+        "eid": "b5fc8da7c00af7067971b669"
+    },
+    {
+        "data_id": "3210",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "8427ecf74cc64893731dbfdd",
+        "wid": "841f80840ce01ea79d39a12b",
+        "eid": "b06e941f858d422819c493b6"
+    },
+    {
+        "data_id": "0211",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "e991ad1f20ee89534a5d65e6",
+        "wid": "a1d64a8a009cef443236665a",
+        "eid": "9af7a2828a2f230513a74c28"
+    },
+    {
+        "data_id": "2464",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "3ad14482a3e76d1fff5b28f5",
+        "wid": "202107a0b44501a5d14ac8da",
+        "eid": "870e20aa4f88918b9fc35f3f"
+    },
+    {
+        "data_id": "0030",
+        "category": "couch",
+        "type": "partstudio",
+        "did": "991e3d753cbcb17f3973632d",
+        "wid": "b5f18542ea15db374392788a",
+        "eid": "b58ffe8c212172856520c626"
+    },
+    {
+        "data_id": "1215",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "576845fc586e29cfa22c4f41",
+        "wid": "d8a1af4f4cd57c716d4991f5",
+        "eid": "b5c23d654899b92fceb640d0"
+    },
+    {
+        "data_id": "0487",
+        "category": "lamp",
+        "type": "partstudio",
+        "did": "93b43200daef5f183a01445d",
+        "wid": "421bb3f5c9230ae68c8dcbf2",
+        "eid": "c2960dd97673d2e8480c8d17"
+    },
+    {
+        "data_id": "1264",
+        "category": "sofa",
+        "type": "partstudio",
+        "did": "f48f19398f7bffc4645587fa",
+        "wid": "0f2661911afb7663c90cf8fe",
+        "eid": "649c08400064d392f5354186"
+    },
+    {
+        "data_id": "2502",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "7df4c30518eebbac9345e168",
+        "wid": "0b319b6a920685d042dbad20",
+        "eid": "b25a885c7afb6264f1b98337"
+    },
+    {
+        "data_id": "0290",
+        "category": "bathtub",
+        "type": "partstudio",
+        "did": "446e5697bbe83fa84f9cb9f2",
+        "wid": "dad9c1e8605348138dc55412",
+        "eid": "c798e28bbd0f96b4df178952"
+    },
+    {
+        "data_id": "0354",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "061af58cb52319d856dc82db",
+        "wid": "aa257f97bfe90dcdb9fabeb4",
+        "eid": "2c1ee645652a78c2330db7b6"
+    },
+    {
+        "data_id": "0253",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "837fdc63963afa3ae0da0e2a",
+        "wid": "398d35aec9e2fd3766aa2bc4",
+        "eid": "abc962d227f6440f77aa10b0"
+    },
+    {
+        "data_id": "2060",
+        "category": "table",
+        "type": "partstudio",
+        "did": "db1ba0fd9c0f64b40f2f0d67",
+        "wid": "7cb4b92b5fb952116c3fbb39",
+        "eid": "a78f96fa9c4eea4f5f98a163"
+    },
+    {
+        "data_id": "0012",
+        "category": "table",
+        "type": "partstudio",
+        "did": "1193bece5561fde28479405d",
+        "wid": "95d0a13aee67c81ed6c1e7b5",
+        "eid": "cd0983e3911e498d1740038e"
+    },
+    {
+        "data_id": "1452",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "61a9743e56eaccc1794f7ed9",
+        "wid": "bc20429771f65796619990ef",
+        "eid": "e887b6bc1396a1fc2eb97dda"
+    },
+    {
+        "data_id": "0838",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "369e545bf5536f30b6db3c31",
+        "wid": "95e62a2e60ea69aa903a0e0b",
+        "eid": "6d3b52572103929b9230be22"
+    },
+    {
+        "data_id": "1185",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "92787578f2f490baf5b914d8",
+        "wid": "083a373d44b77269db0a26fc",
+        "eid": "6fac5b810a314eed8d0d2845"
+    },
+    {
+        "data_id": "3247",
+        "category": "table",
+        "type": "partstudio",
+        "did": "ab6a680830f60e64281b0dd2",
+        "wid": "337a5fd9ac1460585f243758",
+        "eid": "da3304612687e0a6f3cec448"
+    },
+    {
+        "data_id": "0357",
+        "category": "couch",
+        "type": "partstudio",
+        "did": "3ac7607361a3aca5525b7c4f",
+        "wid": "23615d6266c7467ee8622922",
+        "eid": "f8b2909bce9c1b546d249993"
+    },
+    {
+        "data_id": "7092",
+        "category": "table",
+        "type": "partstudio",
+        "did": "154f785464d40615f42066cb",
+        "wid": "d175baa80c6bbad5dfb2bbe5",
+        "eid": "d6455ccaebbf18f8ec6544c8"
+    },
+    {
+        "data_id": "0441",
+        "category": "bathtub",
+        "type": "partstudio",
+        "did": "65faef9c5d8646d4877ff0a6",
+        "wid": "2238787dc82e4195b47a6557",
+        "eid": "P6RLqJekjlMuayeVdjNwygHb"
+    },
+    {
+        "data_id": "2436",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "075109264622a2ba2d7daddb",
+        "wid": "30aacafbf6e34cc6172d21ae",
+        "eid": "42fc28316a8b96400def92fb"
+    },
+    {
+        "data_id": "2209",
+        "category": "bed",
+        "type": "partstudio",
+        "did": "43bbdbc1ee6e162be8e985fe",
+        "wid": "657934dff88844d913158304",
+        "eid": "a61f53af6f89c9306babdf9d"
+    },
+    {
+        "data_id": "0041",
+        "category": "chair",
+        "type": "partstudio",
+        "did": "c22f4ca308345903ba6ef93b",
+        "wid": "c67d2805134e20e54ce3bbed",
+        "eid": "5bd16c0235180a119571fc40"
+    },
+    {
+        "data_id": "0463",
+        "category": "bench",
+        "type": "partstudio",
+        "did": "75bfb46b068491adadcb6505",
+        "wid": "dcc34b2d3cf4e7e69d3d7ae1",
+        "eid": "80a4d0a9d9bc1af938bb5690"
+    },
+    {
+        "data_id": "0796",
+        "category": "sofa",
+        "type": "partstudio",
+        "did": "bcbc841bc8d7861b9e2f4b95",
+        "wid": "117caeae78f8ffd22bfa57c3",
+        "eid": "da18357a61e606a3c5875be4"
+    },
+    {
+        "data_id": "0981",
+        "category": "table",
+        "type": "partstudio",
+        "did": "1082d942398bc40bb9bf846c",
+        "wid": "2c6b290c479fe7962af5cf54",
+        "eid": "038b98b8aa5129a2b6063cd3"
+    },
+    {
+        "data_id": "2020",
+        "category": "table",
+        "type": "partstudio",
+        "did": "95e9dbbc1d9d118773edf895",
+        "wid": "bdb68b891dc2780911dae102",
+        "eid": "72ae10c99927feb5234a4b69"
+    }
+]

@@ -570,6 +570,8 @@ def extract_bicubic_features_dir(shape: TopoDS_Shape):
         face_idx += 1
         face_exp.Next()
 
+    center = np.zeros(3, dtype=np.float32)
+    scale = np.float32(1.0)
     try:
         face_controls = np.array(face_controls, dtype=np.float32)
         edge_controls = np.array(edge_controls, dtype=np.float32)
@@ -581,8 +583,8 @@ def extract_bicubic_features_dir(shape: TopoDS_Shape):
         if all_pts_4d.size > 0:
             xyz_physical = all_pts_4d[:, :3]
             vmin, vmax = xyz_physical.min(axis=0), xyz_physical.max(axis=0)
-            center = (vmin + vmax) / 2.0
-            scale = 2.0 / (np.max(vmax - vmin) + 1e-8)
+            center = ((vmin + vmax) / 2.0).astype(np.float32)
+            scale = np.float32(2.0 / (np.max(vmax - vmin) + 1e-8))
             face_controls[..., :3] = (face_controls[..., :3] - center) * scale
             if edge_controls.size > 0:
                 edge_controls[..., :3] = (edge_controls[..., :3] - center) * scale
@@ -596,4 +598,6 @@ def extract_bicubic_features_dir(shape: TopoDS_Shape):
         "inner_edge_indices": np.array(inner_edge_indices, dtype=np.int32),
         "inner_loop_offsets": np.array(inner_loop_offsets, dtype=np.int32),
         "face_inner_offsets": np.array(face_inner_offsets, dtype=np.int32),
+        "center": center,
+        "scale": scale,
     }
