@@ -19,17 +19,36 @@ from utils import (
     preprocess_shape,
 )
 
-def worker_task(file_path_str, output_dir_str, max_faces, max_edges, perface_edge):
-    gc.disable()  # avoid GC pauses mid-task; gc.collect() called on exit
+CATEGORY_INDEX = {
+    "bathtub": 0, "bed": 1, "bench": 2, "bookshelf": 3, "cabinet": 4,
+    "chair": 5, "couch": 6, "lamp": 7, "sofa": 8, "table": 9,
+}
+
+
+def _infer_category(file_path: Path, label_map: dict | None) -> str:
+    if label_map and file_path.stem in label_map:
+        return label_map[file_path.stem]
+    parts = file_path.parts
+    if len(parts) >= 4:
+        candidate = parts[-3]
+        if candidate in CATEGORY_INDEX:
+            return candidate
+    return ""
+
+
+def worker_task(file_path_str, output_dir_str, max_faces, max_edges, perface_edge, label_map=None):
     file_path = Path(file_path_str)
     base_name = file_path.stem
+    category = _infer_category(file_path, label_map)
     shard_dir = Path(output_dir_str) / base_name[:6]
     shard_dir.mkdir(parents=True, exist_ok=True)
 
-    # 最佳实践：使用 glob 匹配特征名，保留 Early Exit 性能优势，避免加载已处理的模型
-    if next(shard_dir.glob(f"{base_name}_f*_e*.npz"), None):
+    model_prefix = "_".join(base_name.split("_")[:2])
+    cat_suffix = f"_{category}" if category else ""
+    if next(shard_dir.glob(f"{model_prefix}_f*_e*{cat_suffix}.npz"), None):
         return "SKIPPED", None
 
+    gc.disable()  # avoid GC pauses mid-task; restored in finally
     try:
         shape = read_step_file(str(file_path), True)
         fixer = ShapeFix_Shape(shape)
@@ -48,7 +67,10 @@ def worker_task(file_path_str, output_dir_str, max_faces, max_edges, perface_edg
         data["f_count"] = np.array([f_count], dtype=np.int32)
         data["e_count"] = np.array([actual_e_count], dtype=np.int32)
 
-        final_filename = f"{base_name.split('_')[0]}_{base_name.split('_')[1]}_f{f_count}_e{actual_e_count}.npz"
+        cat_idx = CATEGORY_INDEX.get(category, -1) if category else -1
+        final_filename = f"{model_prefix}_f{f_count}_e{actual_e_count}{cat_suffix}.npz"
+        if cat_idx >= 0:
+            data["category"] = np.array([cat_idx], dtype=np.int32)
         final_path = shard_dir / final_filename
         temp_path = shard_dir / f"{base_name}.tmp.npz"
 
@@ -80,12 +102,35 @@ def filter_and_dedup(file_paths, max_faces, max_edges):
     return list(filtered.values())
 
 
+def _prefix_candidates(raw_prefix: str) -> list[str]:
+    s = str(raw_prefix)
+    candidates = []
+    for c in (s, Path(s).name, Path(s).stem):
+        if c and c not in candidates:
+            candidates.append(c)
+
+    expanded = list(candidates)
+    for c in candidates:
+        if "__" in c:
+            base = c.split("__")[0]
+            if base and base not in expanded:
+                expanded.append(base)
+    return expanded
+
+
 def load_split_paths(json_path: str, root_dir: str, splits: list[str] | None = None, ext: str = ".step") -> list[str]:
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     target = set(splits) if splits else set(data.keys())
-    p2s = {p: split for split, prefixes in data.items() if split in target for p in prefixes}
+    p2s = {}
+    for split, prefixes in data.items():
+        if split not in target:
+            continue
+        for raw_prefix in prefixes:
+            for p in _prefix_candidates(raw_prefix):
+                if p not in p2s:
+                    p2s[p] = split
     lengths = sorted({len(p) for p in p2s}, reverse=True)
 
     result = []
@@ -102,13 +147,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input", required=True)
     parser.add_argument("-o", "--output", required=True)
-    parser.add_argument("-w", "--workers", type=int, default=os.cpu_count() - 4)
+    parser.add_argument("-w", "--workers", type=int, default=max(1, (os.cpu_count() or 1) - 4))
     parser.add_argument("-t", "--timeout", type=int, default=600)
     parser.add_argument("--max-faces", type=int, default=100)
     parser.add_argument("--max-edges", type=int, default=1000)
     parser.add_argument("--perface-edge", type=int, default=None)
     parser.add_argument("--split", type=str, default=None, help="Path to split JSON file")
     parser.add_argument("--splits", nargs="+", default=None, help="Splits to use, e.g. train val test")
+    parser.add_argument("--label-json", type=str, default=None, help="JSON mapping stem→category label")
     args = parser.parse_args()
 
     in_dir, out_dir = Path(args.input), Path(args.output)
@@ -123,6 +169,11 @@ def main():
     else:
         files = list(Path(in_dir).rglob("*.step"))
 
+    label_map = None
+    if args.label_json:
+        with open(args.label_json) as f:
+            label_map = json.load(f)
+
     total = len(files)
     stats = {"SUCCESS": 0, "SKIPPED": 0, "ERROR": 0, "CRASH": 0, "TIMEOUT": 0}
 
@@ -134,6 +185,7 @@ def main():
                 pool.schedule(
                     worker_task,
                     args=(str(f), str(out_dir), args.max_faces, args.max_edges, args.perface_edge),
+                    kwargs={"label_map": label_map},
                     timeout=args.timeout,
                 ): f
                 for f in files

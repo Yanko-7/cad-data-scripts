@@ -134,3 +134,16 @@ ehthumbs_vista.db
 *.npz
 *.npy
 *.png
+
+# 本地 CAD 示例、渲染产物和未完成草稿
+*.stp
+*.stl
+/render_input/
+/render_output/
+/rendered_pngs/
+/filtering/fliter_ste
+
+# 可重新生成的筛选和统计结果
+/configs/filtered_abc_primitives.json
+/configs/filtered_abc_step_topology.json
+/configs/abc1m_stats.json

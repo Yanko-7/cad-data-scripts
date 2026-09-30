@@ -14,7 +14,7 @@ from OCC.Core.TopAbs import (
 from OCC.Core.TopLoc import TopLoc_Location
 from OCC.Core.TopExp import TopExp_Explorer
 from OCC.Core.TopoDS import topods
-from OCC.Extend.DataExchange import read_step_file, write_ply_file
+from OCC.Extend.DataExchange import read_step_file
 
 
 def process_single_file(step_path, out_dir):
@@ -24,7 +24,7 @@ def process_single_file(step_path, out_dir):
         verts, faces = shape2mesh(origin_shape)
         if len(faces) > 0:
             mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-            points, _ = trimesh.sample.sample_surface(mesh, 4096)
+            points, _ = trimesh.sample.sample_surface(mesh, 2000)
 
             point_cloud = trimesh.PointCloud(points)
 
@@ -82,17 +82,36 @@ def shape2mesh(shape):
     return np.array(vertices, dtype=np.float32), np.array(triangles, dtype=np.int32)
 
 
-def main(args):
-    in_dir, out_dir = Path(args.input), Path(args.output)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    # step_files = load_dataset_fast(
-    #     "configs/filtered_brep_abc_data_split_6bit_paths.json",
-    #     "/cache/yanko/dataset/abc/",
-    #     ext=".step",
-    # )["test"]
+def find_step_paths(json_path: str, step_root: str, split: str) -> list:
+    with open(json_path) as f:
+        ids = json.load(f)[split]
+    valid_ids = set(ids)
+    lengths = sorted({len(v) for v in valid_ids}, reverse=True)
+    result = {}
+    for r, _, files in os.walk(step_root):
+        for f in files:
+            if not f.endswith(".step"):
+                continue
+            stem = f[:-5]
+            for length in lengths:
+                if len(stem) >= length and stem[:length] in valid_ids:
+                    fid = stem[:length]
+                    if fid not in result:
+                        result[fid] = Path(r) / f
+                    break
+    return list(result.values())
 
-    step_files = list(in_dir.glob("*.step"))
-    print(f"Found {len(step_files)} STEP files in {in_dir}")
+
+def main(args):
+    out_dir = Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.json:
+        step_files = find_step_paths(args.json, args.step_root, args.split)
+        print(f"Found {len(step_files)} STEP files from JSON ({args.split} split)")
+    else:
+        step_files = list(Path(args.input).glob("*.step"))
+        print(f"Found {len(step_files)} STEP files in {args.input}")
 
     success_count = 0
     with ProcessPool(max_workers=120, max_tasks=1) as pool:
@@ -129,10 +148,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-i", "--input", required=True, help="Input directory containing STEP files"
-    )
-    parser.add_argument(
-        "-o", "--output", required=True, help="Output directory for PLY files"
-    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("-i", "--input", help="Input directory containing STEP files")
+    parser.add_argument("-o", "--output", required=True, help="Output directory for PLY files")
+    source.add_argument("--json", default=None, help="Filtered JSON path (use instead of --input)")
+    parser.add_argument("--step_root", default="/cache/yanko/dataset/abc-origin/", help="STEP files root dir")
+    parser.add_argument("--split", default="test", help="Split to process (train/val/test)")
     main(parser.parse_args())

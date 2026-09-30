@@ -7,8 +7,8 @@ from typing import Dict, List, Tuple
 import numpy as np
 from tqdm import tqdm
 
-MAX_FACE = 30
-PER_FACE_EDGE_LIMIT = 20
+MAX_FACE = 50
+PER_FACE_EDGE_LIMIT = 30
 TOTAL_EDGE_LIMIT = 1000
 BBOX_THRES = 1 / (2 ** (10 - 1))
 BREPGEN_THRES = 0.05 / 3
@@ -81,8 +81,8 @@ def check_topology(
                 inner_edges[inner_loop_offsets[l_idx] : inner_loop_offsets[l_idx + 1]]
             )
 
-        # if len(e_ids) > PER_FACE_EDGE_LIMIT:
-        #     return False, [], "exceeds_per_face_edge_limit"
+        if len(e_ids) > PER_FACE_EDGE_LIMIT:
+            return False, [], "exceeds_per_face_edge_limit"
 
         face_edges_adj.append(e_ids)
         for e_id in set(e_ids):

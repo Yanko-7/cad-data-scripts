@@ -159,3 +159,39 @@ ABC STEP 文件
             │
             └─ analysis/plot_distributions.py        → 分布可视化
 ```
+
+
+## 新增及更新工具
+
+| 脚本 | 用途 |
+|------|------|
+| `filtering/filter_step_by_topology.py` | 在 STEP 上检查水密性、拆分闭合面/边并按拓扑复杂度筛选，输出 `configs/filtered_abc_step_topology.json`。 |
+| `filtering/filter_abc_primitives.py` | 检查已有 primitive NPZ 的拓扑、有限坐标及重复包围盒，输出 `configs/filtered_abc_primitives.json`。 |
+| `analysis/stats_abc1m_solids.py` | 统计 ABC-1M 目标实体的面数、边数及分布，输出 `configs/abc1m_stats.json`。 |
+| `analysis/stats_abc1m_training_rows.py` | 从本地 Parquet 或 Hugging Face 统计训练集过滤后的行数及降采样后的预期数量。 |
+| `processing/extract_step_to_npz_bezier.py` | 支持 split 路径匹配及 `--label-json` 类别映射，类别写入文件名和 NPZ。 |
+| `processing/convert_step_to_npg.py` | 将单个 STEP 或目录中的 STEP/STP 渲染为 PNG；保留原脚本名以兼容已有调用。 |
+
+STEP/NPZ 拓扑过滤默认限制为 50 个面、每面 30 条边、总计 1000 条边。
+过滤与实体统计脚本的输入目录、划分文件及并行数在脚本内配置。
+两个 `filtered_abc_*.json` 和 `abc1m_stats.json` 是可重新生成的本地结果，
+由 `.gitignore` 排除；运行对应脚本即可生成。
+
+```bash
+# 渲染单个模型；无显示服务的 Linux 环境可加 --xvfb（需安装 Xvfb）
+python processing/convert_step_to_npg.py -i model.stp -o rendered_pngs -w 1
+
+# 按划分生成 PLY 点云（每个模型采样 2000 点）；--input 和 --json 二选一
+python processing/convert_step_to_ply.py --json configs/filtered_abc_step_topology.json --step_root /data/abc --split test -o /data/ply
+
+# 根据 stem → 类别名称的 JSON 映射提取带标签的 Bézier 特征
+python processing/extract_step_to_npz_bezier.py -i /data/step -o /data/npz --label-json labels.json
+
+# 统计本地 ABC-1M Parquet 训练集
+python analysis/stats_abc1m_training_rows.py /data/abc-1m
+```
+
+几何处理需要 `pythonocc-core`，并行任务使用 `pebble`；渲染额外需要
+`pyvista`，PLY 导出需要 `trimesh`。Parquet 统计需要 `pyarrow`，在线读取
+额外需要 `huggingface_hub`。通用依赖包括 `numpy` 和 `tqdm`。
+本地 CAD 示例和渲染产物由 `.gitignore` 排除，已跟踪的测试模型保持不变。
